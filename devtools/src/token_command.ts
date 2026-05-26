@@ -25,6 +25,9 @@ type TokenIssueCliParams = {
   accessKeyId: string;
   secretKeyId: string;
   deviceSecretKey: string;
+  accessKeyIdFromEnv?: boolean;
+  secretKeyIdFromEnv?: boolean;
+  deviceSecretKeyFromEnv?: boolean;
   appId: string;
   remoteId: string;
   openapiEndpoint?: string;
@@ -87,6 +90,11 @@ const errorReasonCodeMapping: Record<string, number> = {
   internal_error: 5,
 };
 
+type ResolvedTokenIssueValue = {
+  value: string;
+  fromEnv: boolean;
+};
+
 function normalizeTokenCommandError(error: unknown): Required<CliError> {
   if (typeof error === 'object' && error !== null) {
     const typed = error as CliError;
@@ -136,6 +144,9 @@ async function runTokenIssue(params: TokenIssueCliParams, options: CliOptions): 
       accessKeyId: params.accessKeyId,
       secretKeyId: params.secretKeyId,
       deviceSecretKey: params.deviceSecretKey,
+      accessKeyIdFromEnv: params.accessKeyIdFromEnv,
+      secretKeyIdFromEnv: params.secretKeyIdFromEnv,
+      deviceSecretKeyFromEnv: params.deviceSecretKeyFromEnv,
       appId: params.appId,
       remoteId: params.remoteId,
       endpoint: params.endpoint,
@@ -195,15 +206,15 @@ function resolveRequiredTokenIssueValue(
   fieldName: string,
   envVarName: string,
   optionName: string,
-): string {
+): ResolvedTokenIssueValue {
   const normalizedExplicit = explicitValue?.trim();
   if (normalizedExplicit) {
-    return normalizedExplicit;
+    return {value: normalizedExplicit, fromEnv: false};
   }
 
   const normalizedEnv = process.env[envVarName]?.trim();
   if (normalizedEnv) {
-    return normalizedEnv;
+    return {value: normalizedEnv, fromEnv: true};
   }
 
   const error = new Error(
@@ -281,10 +292,13 @@ async function runTokenIssueFromCli(
     );
 
     return await runTokenIssue({
-      accessKeyId,
-      secretKeyId,
-      deviceSecretKey,
-      appId,
+      accessKeyId: accessKeyId.value,
+      secretKeyId: secretKeyId.value,
+      deviceSecretKey: deviceSecretKey.value,
+      accessKeyIdFromEnv: accessKeyId.fromEnv,
+      secretKeyIdFromEnv: secretKeyId.fromEnv,
+      deviceSecretKeyFromEnv: deviceSecretKey.fromEnv,
+      appId: appId.value,
       remoteId,
       openapiEndpoint: commandOptions.openapiEndpoint,
       endpoint: commandOptions.endpoint,

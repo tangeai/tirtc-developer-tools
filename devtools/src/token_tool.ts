@@ -9,6 +9,9 @@ export type TokenIssueInput = {
   accessKeyId: string;
   secretKeyId: string;
   deviceSecretKey: string;
+  accessKeyIdFromEnv?: boolean;
+  secretKeyIdFromEnv?: boolean;
+  deviceSecretKeyFromEnv?: boolean;
   appId: string;
   remoteId: string;
   endpoint?: string;
@@ -249,6 +252,9 @@ export async function issueToken(input: TokenIssueInput): Promise<string> {
       accessKeyId: input.accessKeyId,
       secretKeyId: input.secretKeyId,
       deviceSecretKey: input.deviceSecretKey,
+      accessKeyIdFromEnv: input.accessKeyIdFromEnv,
+      secretKeyIdFromEnv: input.secretKeyIdFromEnv,
+      deviceSecretKeyFromEnv: input.deviceSecretKeyFromEnv,
       remoteId: input.remoteId,
       subject: input.subject,
       ttlSeconds: input.ttlSeconds,

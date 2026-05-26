@@ -9,6 +9,9 @@ export type IssueTokenInput = {
   accessKeyId: string;
   secretKeyId: string;
   deviceSecretKey: string;
+  accessKeyIdFromEnv?: boolean;
+  secretKeyIdFromEnv?: boolean;
+  deviceSecretKeyFromEnv?: boolean;
   remoteId: string;
   subject?: string;
   ttlSeconds?: number;
@@ -61,11 +64,17 @@ export async function issueToken(input: IssueTokenInput): Promise<string> {
   const args = [
     'issue',
     '--remote-id', input.remoteId,
-    '--access-key-id', input.accessKeyId,
-    '--secret-key-id', input.secretKeyId,
-    '--device-secret-key', input.deviceSecretKey,
     '--json',
   ];
+  if (!input.accessKeyIdFromEnv) {
+    args.push('--access-key-id', input.accessKeyId);
+  }
+  if (!input.secretKeyIdFromEnv) {
+    args.push('--secret-key-id', input.secretKeyId);
+  }
+  if (!input.deviceSecretKeyFromEnv) {
+    args.push('--device-secret-key', input.deviceSecretKey);
+  }
   if (input.subject) {
     args.push('--subject', input.subject);
   }

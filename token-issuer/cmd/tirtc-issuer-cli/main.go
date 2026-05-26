@@ -45,6 +45,12 @@ type secretConfig struct {
 	deviceSecretKey string
 }
 
+type tokenResponse struct {
+	Token       string        `json:"token"`
+	Payload     issuer.Claims `json:"payload"`
+	PayloadJSON string        `json:"payloadJson,omitempty"`
+}
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -99,12 +105,17 @@ func runIssue(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 0
 	}
 	if *jsonOutput {
+		payloadJSON, err := json.Marshal(result.Claims)
+		if err != nil {
+			return writeError(stdout, stderr, true, issuer.Internal("failed to encode claims"))
+		}
 		writeJSON(stdout, outputEnvelope{
 			Code:    0,
 			Message: "OK",
-			Data: map[string]interface{}{
-				"token":  result.Token,
-				"claims": result.Claims,
+			Data: tokenResponse{
+				Token:       result.Token,
+				Payload:     result.Claims,
+				PayloadJSON: string(payloadJSON),
 			},
 		})
 		return 0
@@ -206,8 +217,8 @@ func handleTokenRequest(response http.ResponseWriter, request *http.Request, con
 		return
 	}
 	writeHTTPJSON(response, http.StatusOK, map[string]interface{}{
-		"token":  result.Token,
-		"claims": result.Claims,
+		"token":   result.Token,
+		"payload": result.Claims,
 	})
 }
 

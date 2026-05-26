@@ -59,6 +59,43 @@ JSON
     expect(args).toContain('subject-test');
   });
 
+  it('does not forward env-sourced secrets through child argv', async () => {
+    const argsPath = path.join(tempRoot, 'args.txt');
+    writeFakeIssuer(
+      issuerPath,
+      `printf '%s\\n' "$@" > '${argsPath}'
+case "$*" in
+  *env-ak*|*env-sid*|*env-device-secret*)
+    echo "secret leaked in argv" >&2
+    exit 9
+    ;;
+esac
+cat <<'JSON'
+{"code":0,"message":"OK","data":{"token":"v1.payload.signature"}}
+JSON
+`,
+    );
+
+    await expect(issueToken({
+      accessKeyId: 'env-ak',
+      secretKeyId: 'env-sid',
+      deviceSecretKey: 'env-device-secret',
+      accessKeyIdFromEnv: true,
+      secretKeyIdFromEnv: true,
+      deviceSecretKeyFromEnv: true,
+      remoteId: 'device-001',
+    })).resolves.toBe('v1.payload.signature');
+
+    const args = fs.readFileSync(argsPath, 'utf8');
+    expect(args).toContain('issue');
+    expect(args).not.toContain('--access-key-id');
+    expect(args).not.toContain('--secret-key-id');
+    expect(args).not.toContain('--device-secret-key');
+    expect(args).not.toContain('env-ak');
+    expect(args).not.toContain('env-sid');
+    expect(args).not.toContain('env-device-secret');
+  });
+
   it('surfaces issuer structured failures without OpenAPI fallback', async () => {
     writeFakeIssuer(
       issuerPath,

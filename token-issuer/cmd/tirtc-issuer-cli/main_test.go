@@ -34,9 +34,16 @@ func TestIssueJSONUsesFlagOverEnvAndRedactsErrors(t *testing.T) {
 		t.Fatalf("decode envelope: %v", err)
 	}
 	data := envelope["data"].(map[string]interface{})
-	claims := data["claims"].(map[string]interface{})
-	if claims["iss"] != "flag-ak" {
-		t.Fatalf("flag did not override env: %+v", claims)
+	payload := data["payload"].(map[string]interface{})
+	if payload["iss"] != "flag-ak" {
+		t.Fatalf("flag did not override env: %+v", payload)
+	}
+	payloadJSON, ok := data["payloadJson"].(string)
+	if !ok || !strings.Contains(payloadJSON, `"scope":"connect:device://device-001"`) {
+		t.Fatalf("unexpected payloadJson: %+v", data)
+	}
+	if _, ok := data["claims"]; ok {
+		t.Fatalf("legacy claims field must not be present: %+v", data)
 	}
 }
 
@@ -71,5 +78,12 @@ func TestHTTPIssuesToken(t *testing.T) {
 	token, ok := body["token"].(string)
 	if !ok || !strings.HasPrefix(token, "v1.") {
 		t.Fatalf("unexpected token response: %+v", body)
+	}
+	payload, ok := body["payload"].(map[string]interface{})
+	if !ok || payload["scope"] != "connect:device://device-001" {
+		t.Fatalf("unexpected payload response: %+v", body)
+	}
+	if _, ok := body["claims"]; ok {
+		t.Fatalf("legacy claims field must not be present: %+v", body)
 	}
 }
