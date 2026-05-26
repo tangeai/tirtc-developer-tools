@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -99,8 +100,11 @@ func NormalizeTTL(ttlSeconds int64) int64 {
 }
 
 func ValidateInput(input SigningInput) error {
-	if input.RemoteID == "" {
+	if strings.TrimSpace(input.RemoteID) == "" {
 		return Missing("remote_id")
+	}
+	if _, err := DeviceIDFromRemoteID(input.RemoteID); err != nil {
+		return err
 	}
 	if input.AccessKeyID == "" {
 		return Missing("TIRTC_ACCESS_KEY_ID")
@@ -124,8 +128,30 @@ func ValidateInput(input SigningInput) error {
 	return nil
 }
 
+func DeviceIDFromRemoteID(remoteID string) (string, error) {
+	normalized := strings.TrimSpace(remoteID)
+	if normalized == "" {
+		return "", Missing("remote_id")
+	}
+	const deviceScheme = "device://"
+	if strings.Contains(normalized, "://") {
+		if !strings.HasPrefix(normalized, deviceScheme) {
+			return "", Invalid("remote_id", "remote_id must be a bare device id or device:// id")
+		}
+		normalized = strings.TrimSpace(strings.TrimPrefix(normalized, deviceScheme))
+	}
+	if normalized == "" {
+		return "", Missing("remote_id")
+	}
+	return normalized, nil
+}
+
 func Sign(input SigningInput) (SignedToken, error) {
 	if err := ValidateInput(input); err != nil {
+		return SignedToken{}, err
+	}
+	deviceID, err := DeviceIDFromRemoteID(input.RemoteID)
+	if err != nil {
 		return SignedToken{}, err
 	}
 	now := input.Now
@@ -142,7 +168,7 @@ func Sign(input SigningInput) (SignedToken, error) {
 	iat := now.Unix()
 	claims := Claims{
 		Subject: NormalizeSubject(input.Subject),
-		Scope:   "connect:" + input.RemoteID,
+		Scope:   "connect:device://" + deviceID,
 		Issuer:  input.AccessKeyID,
 		Issued:  iat,
 		Expires: iat + NormalizeTTL(input.TTLSeconds),

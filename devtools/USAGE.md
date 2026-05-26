@@ -23,17 +23,18 @@ node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --help
 ```sh
 export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
 export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
+export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 export TIRTC_APP_ID="<APP_ID>"
 export TIRTC_DEVICE_ID="<REMOTE_ID>"
 export TIRTC_ENDPOINT="<SERVICE_ENTRY>"
-export TIRTC_OPEN_API_ENDPOINT="<OPENAPI_ENDPOINT>"
 
 node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json token issue <REMOTE_ID> \
-  --endpoint <ENDPOINT> \
-  --openapi-endpoint <OPENAPI_ENDPOINT>
+  --endpoint <ENDPOINT>
 
 ./script/issue_devtools_token.sh --token-only
 ```
+
+`--openapi-endpoint` is accepted only for compatibility with older scripts. Token signing is local and does not call a remote OpenAPI service.
 
 `token issue` preserves the public JSON envelope:
 
@@ -46,8 +47,7 @@ node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json token issu
       "app_id": "APP",
       "remote_id": "REMOTE",
       "token": "<TOKEN>",
-      "endpoint": "http://...",
-      "openapi_endpoint": "http://..."
+      "endpoint": "http://..."
     },
     "payloadJson": "{\"app_id\":\"APP\",\"remote_id\":\"REMOTE\",\"token\":\"<TOKEN>\"}",
     "token": "<TOKEN>",
@@ -99,12 +99,11 @@ token first:
 ```sh
 export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
 export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
+export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 export TIRTC_APP_ID="<APP_ID>"
-export TIRTC_OPEN_API_ENDPOINT="<OPENAPI_ENDPOINT>"
 
 node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json token issue "$TIRTC_DEVICE_ID" \
   --endpoint "$TIRTC_ENDPOINT" \
-  --openapi-endpoint "$TIRTC_OPEN_API_ENDPOINT" \
   > .build/devtools-client-token.json
 ```
 

@@ -24,7 +24,7 @@ func TestDeterministicSigningVector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Sign returned error: %v", err)
 	}
-	const expected = "v1.eyJzdWIiOiJzdWJqZWN0LXRlc3QiLCJzY29wZSI6ImNvbm5lY3Q6ZGV2aWNlLTAwMSIsImlzcyI6ImFrLXRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTcwMDAwMDMwMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.5nArs_Cb5XZcYZzVDDX26jpXFb7N-GLUkBw7v3cAeuU"
+	const expected = "v1.eyJzdWIiOiJzdWJqZWN0LXRlc3QiLCJzY29wZSI6ImNvbm5lY3Q6ZGV2aWNlOi8vZGV2aWNlLTAwMSIsImlzcyI6ImFrLXRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTcwMDAwMDMwMCwibm9uY2UiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3In0.ttJRiSYSBjJIMXLi9ZTufCjaxPHYojtkH6VProqdB1U"
 	if result.Token != expected {
 		t.Fatalf("token mismatch\nwant: %s\n got: %s", expected, result.Token)
 	}
@@ -40,8 +40,21 @@ func TestDeterministicSigningVector(t *testing.T) {
 	if err := json.Unmarshal(payloadJSON, &claims); err != nil {
 		t.Fatalf("unmarshal claims: %v", err)
 	}
-	if claims.Scope != "connect:device-001" || claims.Nonce != "AAECAwQFBgcICQoLDA0ODw" {
+	if claims.Scope != "connect:device://device-001" || claims.Nonce != "AAECAwQFBgcICQoLDA0ODw" {
 		t.Fatalf("unexpected claims: %+v", claims)
+	}
+}
+
+func TestRemoteIDNormalizationMatchesAccessServerScope(t *testing.T) {
+	deviceID, err := DeviceIDFromRemoteID("device://device-001")
+	if err != nil {
+		t.Fatalf("DeviceIDFromRemoteID returned error: %v", err)
+	}
+	if deviceID != "device-001" {
+		t.Fatalf("unexpected device id: %s", deviceID)
+	}
+	if _, err := DeviceIDFromRemoteID("user://device-001"); err == nil {
+		t.Fatalf("expected invalid scheme to fail")
 	}
 }
 

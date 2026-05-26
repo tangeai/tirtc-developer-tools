@@ -154,8 +154,8 @@ function formatIssueTokenFailureMessage(message: string): string {
 
   if (parsed.httpStatus === 200 && parsed.errorCode === 3) {
     return [
-      'token issuing failed: remote service rejected the request.',
-      'Check whether remote_id, access_key_id, secret_key_id, and openapi-endpoint are correct.',
+      'token issuing failed: local issuer rejected the request.',
+      'Check whether remote_id, access_key_id, secret_key_id, and device_secret_key are correct.',
       'detail: error=3 http_status=200',
     ].join(' ');
   }
@@ -169,8 +169,8 @@ function formatIssueTokenFailureMessage(message: string): string {
       detailParts.push('http_status=' + parsed.httpStatus);
     }
     return [
-      'token issuing failed: remote authentication request was not accepted.',
-      'Check whether remote_id, access_key_id, secret_key_id, and openapi-endpoint are correct.',
+      'token issuing failed: issuer request was not accepted.',
+      'Check whether remote_id, access_key_id, secret_key_id, and device_secret_key are correct.',
       'detail: ' + detailParts.join(' '),
     ].join(' ');
   }

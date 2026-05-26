@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -230,7 +231,7 @@ func writeError(stdout io.Writer, stderr io.Writer, jsonOutput bool, err error) 
 	message := "internal error"
 	field := ""
 	var userErr *issuer.UserError
-	if errorsAs(err, &userErr) {
+	if errors.As(err, &userErr) {
 		message = userErr.Message
 		field = userErr.Field
 	} else if err != nil && err.Error() != "" {
@@ -253,7 +254,7 @@ func writeHTTPError(response http.ResponseWriter, status int, err error) {
 	message := "internal error"
 	field := ""
 	var userErr *issuer.UserError
-	if errorsAs(err, &userErr) {
+	if errors.As(err, &userErr) {
 		message = userErr.Message
 		field = userErr.Field
 	} else if err != nil && err.Error() != "" {
@@ -278,17 +279,4 @@ func writeJSON(writer io.Writer, value interface{}) {
 	encoder := json.NewEncoder(writer)
 	encoder.SetEscapeHTML(false)
 	_ = encoder.Encode(value)
-}
-
-func errorsAs(err error, target interface{}) bool {
-	switch typed := target.(type) {
-	case **issuer.UserError:
-		if userErr, ok := err.(*issuer.UserError); ok {
-			*typed = userErr
-			return true
-		}
-		return false
-	default:
-		return false
-	}
 }
