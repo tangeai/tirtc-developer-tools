@@ -24,6 +24,15 @@ npm run build
 node bin/tirtc-devtools-cli.js --help
 ```
 
+源码打包完整 CLI 前，需要先准备预构建 runtime SDK：
+
+```sh
+./script/prepare_runtime.sh
+npm run package
+```
+
+`prepare_runtime.sh` 会把 runtime SDK 放到 `3rd/runtime/<platform>/`。公开仓默认从 GitHub Release 获取 SDK；在 Matrix 主仓内运行时，也可以从本地 `.build/sdk` 生成同样的预构建输入。
+
 ## 常用命令
 
 | 命令 | 用途 |
@@ -109,7 +118,7 @@ client 会写出 `summary.json`、`events.jsonl`、runtime logs 和首帧渲染�
 - `macos-arm64`
 - `linux-x64`
 
-已发布 npm 包会携带对应平台的 issuer、native driver 和 runtime bundle。源码 checkout 默认不包含这些大型运行资产。
+已发布 npm 包会携带对应平台的 issuer、native driver 和 runtime bundle。源码 checkout 默认不提交这些大型运行资产；`driver/` 源码在本仓内，构建时只需要 `3rd/runtime/<platform>` 中的预构建 runtime SDK。
 
 ## 更多命令
 

@@ -40,20 +40,20 @@ case "$mode" in
     npm --prefix "$cli_root" test -- --runInBand tests/token_tool.test.ts tests/embedded_paths.test.ts tests/media_assets_prepare.test.ts tests/smoke.test.ts
     ;;
   real-transport)
-    echo "[cli real-transport] use products/devtools/driver/script/run_capability_probe.sh"
+    echo "[cli real-transport] use developer-tools/devtools/driver/script/run_capability_probe.sh"
     ;;
   e2e)
-    echo "[cli e2e] use products/devtools/driver/script/run_capability_probe.sh"
+    echo "[cli e2e] use developer-tools/devtools/driver/script/run_capability_probe.sh"
     ;;
   two-endpoints)
     echo "[cli two-endpoints] removed with legacy Host"
     ;;
   cli-e2e)
-    "$repo_root/products/devtools/driver/script/run_capability_probe.sh"
+    "$cli_root/driver/script/run_capability_probe.sh"
     ;;
   acceptance)
     npm --prefix "$cli_root" test -- --runInBand
-    "$repo_root/products/devtools/driver/script/run_capability_probe.sh"
+    "$cli_root/driver/script/run_capability_probe.sh"
     ;;
   *)
     echo "unknown mode: $mode" >&2

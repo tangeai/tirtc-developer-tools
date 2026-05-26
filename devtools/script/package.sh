@@ -3,10 +3,13 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CLI_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+DEVELOPER_TOOLS_ROOT=$(cd "$CLI_ROOT/.." && pwd)
 if [[ -n "${TIRTC_MATRIX_REPO_ROOT:-}" ]]; then
   REPO_ROOT=$(cd "$TIRTC_MATRIX_REPO_ROOT" && pwd)
-else
+elif [[ -x "$CLI_ROOT/../../runtime/script/prepare_product_runtime.sh" ]]; then
   REPO_ROOT=$(cd "$CLI_ROOT/../.." && pwd)
+else
+  REPO_ROOT="$DEVELOPER_TOOLS_ROOT"
 fi
 
 resolve_platforms() {
@@ -68,6 +71,9 @@ echo "[package] Building CLI..."
 npm --prefix "$CLI_ROOT" run build
 
 mkdir -p "$CLI_ROOT/.build"
+echo "[package] Preparing runtime SDK input..."
+TIRTC_RUNTIME_PLATFORMS="${platforms[*]}" "$SCRIPT_DIR/prepare_runtime.sh"
+
 echo "[package] Syncing package staging payload..."
 rm -rf "$CLI_ROOT/vendor"
 mkdir -p "$CLI_ROOT/vendor/devtools/driver" "$CLI_ROOT/vendor/runtime"
@@ -83,17 +89,20 @@ for platform in "${platforms[@]}"; do
       ;;
   esac
 
-  echo "[package] Preparing runtime bundle: $platform"
-  "$REPO_ROOT/runtime/script/prepare_product_runtime.sh" --platform "$platform"
+  runtime_sdk="$CLI_ROOT/3rd/runtime/$platform"
+  if [[ ! -d "$runtime_sdk/include" || ! -d "$runtime_sdk/lib" ]]; then
+    echo "[package] runtime SDK not prepared for $platform: $runtime_sdk" >&2
+    exit 1
+  fi
 
   echo "[package] Building DevTools native driver: $platform"
   TIRTC_RUNTIME_PLATFORM="$platform" \
-    TIRTC_RUNTIME_PREPARE_SKIP=1 \
-    "$REPO_ROOT/products/devtools/driver/script/build_probe.sh" >/dev/null
+    TIRTC_DEVTOOLS_RUNTIME_SDK_DIR="$runtime_sdk" \
+    "$CLI_ROOT/driver/script/build.sh" >/dev/null
 
-  copy_dir_contents "$REPO_ROOT/.build/products/runtime/$platform" \
+  copy_dir_contents "$runtime_sdk" \
     "$CLI_ROOT/vendor/runtime/$platform"
-  copy_dir_contents "$REPO_ROOT/.build/devtools-driver/bin/$platform" \
+  copy_dir_contents "$CLI_ROOT/.build/driver/bin/$platform" \
     "$CLI_ROOT/vendor/devtools/driver/$platform"
   stage_driver_runtime_dependencies \
     "$platform" \
@@ -101,15 +110,15 @@ for platform in "${platforms[@]}"; do
     "$CLI_ROOT/vendor/devtools/driver/$platform"
 
   echo "[package] Building token issuer: $platform"
-  TIRTC_MATRIX_REPO_ROOT="$REPO_ROOT" \
-    "$REPO_ROOT/developer-tools/token-issuer/script/build.sh" --platform "$platform" >/dev/null
+  issuer_bin="$("$DEVELOPER_TOOLS_ROOT/token-issuer/script/build.sh" --platform "$platform")"
   mkdir -p "$CLI_ROOT/vendor/issuer-cli/$platform"
-  cp "$REPO_ROOT/.build/developer-tools/token-issuer/bin/$platform/tirtc-issuer-cli" \
-    "$CLI_ROOT/vendor/issuer-cli/$platform/tirtc-issuer-cli"
+  cp "$issuer_bin" "$CLI_ROOT/vendor/issuer-cli/$platform/tirtc-issuer-cli"
 done
 
 mkdir -p "$CLI_ROOT/vendor/runtime/script"
-cp "$REPO_ROOT/runtime/script/prepare_runtime_media_dataset.sh" \
-  "$CLI_ROOT/vendor/runtime/script/prepare_runtime_media_dataset.sh"
+if [[ -f "$REPO_ROOT/runtime/script/prepare_runtime_media_dataset.sh" ]]; then
+  cp "$REPO_ROOT/runtime/script/prepare_runtime_media_dataset.sh" \
+    "$CLI_ROOT/vendor/runtime/script/prepare_runtime_media_dataset.sh"
+fi
 
 echo "[package] Done. Package staging surface staged under vendor/ (gitignored ephemeral surface)."

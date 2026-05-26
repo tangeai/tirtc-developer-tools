@@ -227,13 +227,7 @@ function resolveDriverPath(roots: RoleDriverRoots, platform: string): string {
   appendIfDefined(
     candidates,
     roots.repoRoot
-      ? path.join(roots.repoRoot, '.build/devtools-driver/bin', platform, 'devtools_driver_probe')
-      : undefined,
-  );
-  appendIfDefined(
-    candidates,
-    roots.repoRoot
-      ? path.join(roots.repoRoot, 'products/devtools/driver/bin', platform, 'devtools_driver_probe')
+      ? path.join(roots.repoRoot, 'developer-tools/devtools/.build/driver/bin', platform, 'devtools_driver_probe')
       : undefined,
   );
   appendIfDefined(
@@ -273,15 +267,15 @@ function resolveRuntimeRoot(roots: RoleDriverRoots, platform: string): string {
   const candidates: string[] = [];
   appendIfDefined(
     candidates,
-    roots.repoRoot ? path.join(roots.repoRoot, '.build/products/runtime', platform) : undefined,
-  );
-  appendIfDefined(
-    candidates,
-    roots.repoRoot ? path.join(roots.repoRoot, 'developer-tools/devtools/bin/runtime', platform) : undefined,
+    roots.repoRoot ? path.join(roots.repoRoot, 'developer-tools/devtools/3rd/runtime', platform) : undefined,
   );
   appendIfDefined(
     candidates,
     roots.repoRoot ? path.join(roots.repoRoot, 'developer-tools/devtools/vendor/runtime', platform) : undefined,
+  );
+  appendIfDefined(
+    candidates,
+    roots.repoRoot ? path.join(roots.repoRoot, '.build/products/runtime', platform) : undefined,
   );
   candidates.push(path.join(roots.packageRoot, 'vendor/runtime', platform));
   for (const candidate of candidates) {

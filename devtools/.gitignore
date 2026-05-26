@@ -3,6 +3,7 @@
 /bin/dist/
 /bin/runtime/
 /bin/tools/
+/3rd/
 /.build/
 /config/.local/
 /tests/.local/
