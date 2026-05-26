@@ -1,0 +1,12 @@
+{
+  "mp4Path": "/Users/allenfeng/Development/Repositories/tirtc-nexus/tirtc-matrix/.refers/simple.mp4",
+  "endpoint": "matrix://runtime-e2e",
+  "license": "runtime-license",
+  "remoteId": "peer-e2e",
+  "streamId": 31,
+  "media": "video",
+  "useFakeToken": true,
+  "accessId": "runtime-access-id",
+  "secretKey": "runtime-secret-key",
+  "e2eToken": "v1.fake.<replace-with-real-token-if-needed>"
+}

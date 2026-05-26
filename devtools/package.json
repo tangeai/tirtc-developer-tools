@@ -1,0 +1,59 @@
+{
+  "name": "tirtc-devtools-cli",
+  "version": "0.4.1",
+  "private": false,
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "bin": {
+    "tirtc-devtools-cli": "bin/tirtc-devtools-cli.js"
+  },
+  "files": [
+    "README.md",
+    "USAGE.md",
+    "bin/tirtc-devtools-cli.js",
+    "dist",
+    "script/ensure_ffmpeg.sh",
+    "vendor"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "tsc",
+    "test": "jest",
+    "test:owner": "./script/test.sh owner",
+    "test:publish": "./script/test.sh publish",
+    "test:real-transport": "./script/test.sh real-transport",
+    "test:e2e": "./script/test.sh e2e",
+    "test:two-endpoints": "./script/test.sh two-endpoints",
+    "test:acceptance": "./script/test.sh acceptance",
+    "package:token-issue-assets": "./script/package_token_issue_assets.sh",
+    "verify:token-issue-package": "./script/verify_token_issue_package.sh",
+    "lint": "eslint . --ext .ts --max-warnings=0",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "package": "./script/package.sh",
+    "release:npm": "./script/release-npm.sh",
+    "release:devtools-cli": "./script/release_devtools_cli.sh"
+  },
+  "pkg": {
+    "assets": [
+      "dist/**/*"
+    ]
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "@types/qrcode": "^1.5.5",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.5.0",
+    "pkg": "^5.8.1",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@iarna/toml": "^2.2.5",
+    "commander": "^11.0.0",
+    "qrcode": "^1.5.4",
+    "zod": "^3.22.4"
+  }
+}
