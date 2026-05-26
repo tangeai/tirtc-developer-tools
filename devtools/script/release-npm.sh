@@ -6,8 +6,37 @@ CLI_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 
 publish_flag="${TIRTC_DEVTOOLS_RELEASE_PUBLISH:-0}"
 npm_tag="${TIRTC_DEVTOOLS_NPM_TAG:-latest}"
+npm_userconfig=""
+
+cleanup_npm_userconfig() {
+  if [[ -n "$npm_userconfig" && -f "$npm_userconfig" ]]; then
+    rm -f "$npm_userconfig"
+  fi
+}
+
+configure_publish_auth() {
+  if [[ "$publish_flag" == "0" ]]; then
+    return 0
+  fi
+
+  if [[ -z "${NPM_TOKEN:-}" ]]; then
+    echo "[release:npm] NPM_TOKEN is required for --publish" >&2
+    exit 1
+  fi
+
+  npm_userconfig=$(mktemp "${TMPDIR:-/tmp}/tirtc-devtools-npmrc.XXXXXX")
+  chmod 600 "$npm_userconfig"
+  {
+    echo "registry=https://registry.npmjs.org/"
+    echo '//registry.npmjs.org/:_authToken=${NPM_TOKEN}'
+  } > "$npm_userconfig"
+  export NPM_CONFIG_USERCONFIG="$npm_userconfig"
+  unset npm_config_userconfig
+  trap cleanup_npm_userconfig EXIT
+}
 
 cd "$CLI_DIR"
+configure_publish_auth
 
 version=$(node -p "require('./package.json').version")
 package_name=$(node -p "require('./package.json').name")
@@ -67,8 +96,8 @@ if [[ "$publish_flag" == "0" ]]; then
   exit 0
 fi
 
-echo "[release:npm] verify npm login"
-npm whoami > /dev/null
+echo "[release:npm] verify npm token"
+npm whoami --registry https://registry.npmjs.org/ > /dev/null
 
 echo "[release:npm] publish"
 npm publish --tag "$npm_tag"
