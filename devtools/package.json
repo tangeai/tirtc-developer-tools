@@ -20,7 +20,7 @@
     "build": "tsc",
     "test": "jest",
     "test:owner": "./script/test.sh owner",
-    "test:publish": "./script/test.sh publish",
+    "test:package": "./script/test.sh package",
     "test:real-transport": "./script/test.sh real-transport",
     "test:e2e": "./script/test.sh e2e",
     "test:two-endpoints": "./script/test.sh two-endpoints",
@@ -29,9 +29,7 @@
     "verify:token-issue-package": "./script/verify_token_issue_package.sh",
     "lint": "eslint . --ext .ts --max-warnings=0",
     "lint:fix": "eslint . --ext .ts --fix",
-    "package": "./script/package.sh",
-    "release:npm": "./script/release-npm.sh",
-    "release:devtools-cli": "./script/release_devtools_cli.sh"
+    "package": "./script/package.sh"
   },
   "pkg": {
     "assets": [

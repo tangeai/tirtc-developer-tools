@@ -36,7 +36,7 @@ case "$mode" in
   owner)
     npm --prefix "$cli_root" test -- --runInBand
     ;;
-  publish)
+  package)
     npm --prefix "$cli_root" test -- --runInBand tests/token_tool.test.ts tests/embedded_paths.test.ts tests/media_assets_prepare.test.ts tests/smoke.test.ts
     ;;
   real-transport)
@@ -57,7 +57,7 @@ case "$mode" in
     ;;
   *)
     echo "unknown mode: $mode" >&2
-    echo "usage: ./developer-tools/devtools/script/test.sh [owner|publish|real-transport|e2e|two-endpoints|cli-e2e|acceptance]" >&2
+    echo "usage: ./developer-tools/devtools/script/test.sh [owner|package|real-transport|e2e|two-endpoints|cli-e2e|acceptance]" >&2
     exit 2
     ;;
 esac

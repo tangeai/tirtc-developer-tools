@@ -68,7 +68,7 @@ echo "[package] Building CLI..."
 npm --prefix "$CLI_ROOT" run build
 
 mkdir -p "$CLI_ROOT/.build"
-echo "[package] Syncing npm publish staging payload..."
+echo "[package] Syncing package staging payload..."
 rm -rf "$CLI_ROOT/vendor"
 mkdir -p "$CLI_ROOT/vendor/devtools/driver" "$CLI_ROOT/vendor/runtime"
 mkdir -p "$CLI_ROOT/vendor/issuer-cli"
@@ -112,4 +112,4 @@ mkdir -p "$CLI_ROOT/vendor/runtime/script"
 cp "$REPO_ROOT/runtime/script/prepare_runtime_media_dataset.sh" \
   "$CLI_ROOT/vendor/runtime/script/prepare_runtime_media_dataset.sh"
 
-echo "[package] Done. npm publish staging surface staged under vendor/ (gitignored ephemeral surface)."
+echo "[package] Done. Package staging surface staged under vendor/ (gitignored ephemeral surface)."
