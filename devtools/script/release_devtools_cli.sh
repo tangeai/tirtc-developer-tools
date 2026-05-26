@@ -7,7 +7,7 @@ CLI_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 usage() {
   cat <<'EOF'
 usage:
-  ./developer-tools/public/devtools/script/release_devtools_cli.sh (--bump patch|minor|major | --version X.Y.Z) [options]
+  ./developer-tools/devtools/script/release_devtools_cli.sh (--bump patch|minor|major | --version X.Y.Z) [options]
 
 Options:
   --bump <level>       Compute the next stable SemVer from the latest npm version.
@@ -20,7 +20,7 @@ Options:
   -h, --help           Show this help.
 
 The script queries npm for the currently published package version, updates
-developer-tools/public/devtools/package.json and package-lock.json, then delegates to release-npm.sh.
+developer-tools/devtools/package.json and package-lock.json, then delegates to release-npm.sh.
 EOF
 }
 

@@ -3,7 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CLI_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
-REPO_ROOT=$(cd "$CLI_ROOT/../../.." && pwd)
+if [[ -n "${TIRTC_MATRIX_REPO_ROOT:-}" ]]; then
+  REPO_ROOT=$(cd "$TIRTC_MATRIX_REPO_ROOT" && pwd)
+else
+  REPO_ROOT=$(cd "$CLI_ROOT/../.." && pwd)
+fi
 
 resolve_platforms() {
   if [[ -n "${TIRTC_RUNTIME_PLATFORMS:-}" ]]; then
@@ -97,9 +101,10 @@ for platform in "${platforms[@]}"; do
     "$CLI_ROOT/vendor/devtools/driver/$platform"
 
   echo "[package] Building token issuer: $platform"
-  "$REPO_ROOT/developer-tools/public/token-issuer/script/build.sh" --platform "$platform" >/dev/null
+  TIRTC_MATRIX_REPO_ROOT="$REPO_ROOT" \
+    "$REPO_ROOT/developer-tools/token-issuer/script/build.sh" --platform "$platform" >/dev/null
   mkdir -p "$CLI_ROOT/vendor/issuer-cli/$platform"
-  cp "$REPO_ROOT/.build/developer-tools/public/token-issuer/bin/$platform/tirtc-issuer-cli" \
+  cp "$REPO_ROOT/.build/developer-tools/token-issuer/bin/$platform/tirtc-issuer-cli" \
     "$CLI_ROOT/vendor/issuer-cli/$platform/tirtc-issuer-cli"
 done
 

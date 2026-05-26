@@ -3,7 +3,12 @@ set -euo pipefail
 
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 issuer_root="$(CDPATH= cd -- "$script_dir/.." && pwd)"
-repo_root="$(CDPATH= cd -- "$issuer_root/../../.." && pwd)"
+matrix_repo_root="${TIRTC_MATRIX_REPO_ROOT:-}"
+if [ -n "$matrix_repo_root" ]; then
+  repo_root="$(CDPATH= cd -- "$matrix_repo_root" && pwd)"
+else
+  repo_root="$(CDPATH= cd -- "$issuer_root/.." && pwd)"
+fi
 platform=""
 
 while [ "$#" -gt 0 ]; do
@@ -40,7 +45,11 @@ case "$platform" in
     ;;
 esac
 
-out_dir="$repo_root/.build/developer-tools/public/token-issuer/bin/$platform"
+if [ -n "$matrix_repo_root" ]; then
+  out_dir="$repo_root/.build/developer-tools/token-issuer/bin/$platform"
+else
+  out_dir="$repo_root/.build/token-issuer/bin/$platform"
+fi
 mkdir -p "$out_dir"
 (cd "$issuer_root" && go build -o "$out_dir/tirtc-issuer-cli" ./cmd/tirtc-issuer-cli)
 echo "$out_dir/tirtc-issuer-cli"

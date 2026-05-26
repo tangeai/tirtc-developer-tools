@@ -69,7 +69,7 @@ export function resolveIssuerCliPath(fromDir: string = __dirname): string {
   if (repoRoot) {
     candidates.push(path.join(
       repoRoot,
-      '.build/developer-tools/public/token-issuer/bin',
+      '.build/developer-tools/token-issuer/bin',
       platform,
       'tirtc-issuer-cli',
     ));

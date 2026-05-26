@@ -2,15 +2,15 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-REPO_ROOT=$(cd "$SCRIPT_DIR/../../../.." && pwd)
+CLI_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
 usage() {
   cat <<'USAGE'
 Usage:
-  ./developer-tools/public/devtools/script/prepare_ffmpeg.sh [--platform macos-arm64|linux-x64] [--check-only]
+  ./devtools/script/prepare_ffmpeg.sh [--platform macos-arm64|linux-x64] [--check-only]
 
 Behavior:
-  - Prepares developer-tools/public/devtools/bin/tools/<platform>/
+  - Prepares devtools/bin/tools/<platform>/
   - Reuses existing prepared binaries when present
   - On prepare, prefers system ffmpeg/ffprobe, then user cache, then network download
 USAGE
@@ -128,7 +128,7 @@ if [[ "$platform" != "macos-arm64" && "$platform" != "linux-x64" ]]; then
   exit 1
 fi
 
-tool_dir="$REPO_ROOT/developer-tools/public/devtools/bin/tools/$platform"
+tool_dir="$CLI_ROOT/bin/tools/$platform"
 ffmpeg_bin="$tool_dir/ffmpeg"
 ffprobe_bin="$tool_dir/ffprobe"
 

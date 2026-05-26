@@ -18,7 +18,7 @@ The same values can be passed as `--access-key-id`, `--secret-key-id`, and `--de
 
 ```sh
 ./script/build.sh --platform "$(./script/host_platform.sh)"
-.build/bin/$(./script/host_platform.sh)/tirtc-issuer-cli issue --remote-id device-001 --json
+.build/token-issuer/bin/20 20 12 61 79 80 81 98 701 33 100 204 250 395 398 399 400./script/host_platform.sh)/tirtc-issuer-cli issue --remote-id device-001 --json
 ```
 
 `remote_id` may be either a bare device id such as `device-001` or `device://device-001`. The signed token scope always follows the access server contract: `connect:device://<device_id>`.

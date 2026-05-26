@@ -55,6 +55,7 @@ const prepareExecMaxBuffer = 10 * 1024 * 1024;
 
 function resolveRepoRoot(fromDir: string): string {
   const candidates = [
+    path.resolve(fromDir, '../../../'),
     path.resolve(fromDir, '../../../../'),
     path.resolve(fromDir, '../../../../../'),
   ];

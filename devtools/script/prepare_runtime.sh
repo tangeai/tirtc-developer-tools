@@ -2,7 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-REPO_ROOT=$(cd "$SCRIPT_DIR/../../../.." && pwd)
+if [[ -n "${TIRTC_MATRIX_REPO_ROOT:-}" ]]; then
+  REPO_ROOT=$(cd "$TIRTC_MATRIX_REPO_ROOT" && pwd)
+else
+  REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
+fi
 
 resolve_platform() {
   if [[ -n "${TIRTC_RUNTIME_PLATFORM:-}" ]]; then
@@ -22,7 +26,7 @@ resolve_platform() {
 
 platform="$(resolve_platform)"
 stage_dir="$REPO_ROOT/.build/products/runtime/$platform"
-target_dir="$REPO_ROOT/developer-tools/public/devtools/bin/runtime/$platform"
+target_dir="$REPO_ROOT/developer-tools/devtools/bin/runtime/$platform"
 
 echo "[devtools runtime] preparing staged runtime bundle for $platform..."
 "$REPO_ROOT/runtime/script/prepare_product_runtime.sh" --platform "$platform"

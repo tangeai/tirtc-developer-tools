@@ -1,6 +1,6 @@
 # TiRTC DevTools CLI
 
-`developer-tools/public/devtools/` 承接 `TiRTC DevTools CLI`，是当前唯一公开 DevTools 命令行入口。
+`devtools/` 承接 `TiRTC DevTools CLI`，是当前唯一公开 DevTools 命令行入口。
 
 ## 负责什么
 
@@ -27,9 +27,9 @@
 ## 常用命令
 
 ```sh
-npm --prefix developer-tools/public/devtools run build
-npm --prefix developer-tools/public/devtools test -- --runInBand
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --help
+npm --prefix devtools run build
+npm --prefix devtools test -- --runInBand
+node devtools/bin/tirtc-devtools-cli.js --help
 ```
 
 常用 token 自测入口：
@@ -47,10 +47,10 @@ products/devtools/driver/script/run_capability_probe.sh
 一台电脑模拟上行端送任意 MP4：
 
 ```sh
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json assets prepare \
+node devtools/bin/tirtc-devtools-cli.js --json assets prepare \
   --source ./movie.mp4 \
   --output-root .build/tirtc-assets
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json device start \
+node devtools/bin/tirtc-devtools-cli.js --json device start \
   --source .build/tirtc-assets/manifest.json \
   --video-codec h264 \
   --artifact-root .build/devtools-cli/device-movie-h264
@@ -81,5 +81,5 @@ evidence，用于确认 command 收发面已被覆盖。
 打包入口：
 
 ```sh
-npm --prefix developer-tools/public/devtools run package
+npm --prefix devtools run package
 ```

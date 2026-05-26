@@ -14,7 +14,7 @@ function resolvePlatform(): string {
 }
 
 describe('prepare_ffmpeg gate', () => {
-  const repoRoot = path.resolve(__dirname, '../../../..');
+  const repoRoot = path.resolve(__dirname, '../../..');
   const scriptPath = path.resolve(__dirname, '../script/prepare_ffmpeg.sh');
   const platform = resolvePlatform();
   const toolDir = path.resolve(__dirname, '../bin/tools', platform);

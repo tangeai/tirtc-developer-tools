@@ -6,7 +6,7 @@ function pathExists(filePath: string): boolean {
 }
 
 function isWorkspaceRepoRoot(candidate: string): boolean {
-  return pathExists(path.join(candidate, 'developer-tools/public/devtools/package.json')) &&
+  return pathExists(path.join(candidate, 'developer-tools/devtools/package.json')) &&
     pathExists(path.join(candidate, 'runtime/script/prepare_runtime_media_dataset.sh'));
 }
 
@@ -18,7 +18,7 @@ export function resolveCliPackageRoot(fromDir: string): string {
     path.resolve(fromDir, '../../../..'),
     path.resolve(fromDir, '../../../../..'),
     path.resolve(process.cwd()),
-    path.resolve(process.cwd(), 'developer-tools/public/devtools'),
+    path.resolve(process.cwd(), 'developer-tools/devtools'),
   ];
 
   for (const candidate of candidates) {

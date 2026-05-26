@@ -99,7 +99,7 @@ export function resolveIssueTokenEnvironment(): {
 } {
   return {
     runtimePlatform: 'node',
-    provider: 'developer-tools/public/devtools',
+    provider: 'developer-tools/devtools',
   };
 }
 

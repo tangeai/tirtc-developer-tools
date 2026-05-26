@@ -3,7 +3,12 @@
 set -euo pipefail
 
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-repo_root="$(CDPATH= cd -- "$script_dir/../../../.." && pwd)"
+cli_root="$(CDPATH= cd -- "$script_dir/.." && pwd)"
+if [[ -n "${TIRTC_MATRIX_REPO_ROOT:-}" ]]; then
+  repo_root="$(CDPATH= cd -- "$TIRTC_MATRIX_REPO_ROOT" && pwd)"
+else
+  repo_root="$(CDPATH= cd -- "$script_dir/../../.." && pwd)"
+fi
 
 resolve_platform() {
   if [[ -n "${TIRTC_RUNTIME_PLATFORM:-}" ]]; then
@@ -29,10 +34,10 @@ platform="$(resolve_platform)"
 
 case "$mode" in
   owner)
-    npm --prefix "$repo_root/developer-tools/public/devtools" test -- --runInBand
+    npm --prefix "$cli_root" test -- --runInBand
     ;;
   publish)
-    npm --prefix "$repo_root/developer-tools/public/devtools" test -- --runInBand tests/token_tool.test.ts tests/embedded_paths.test.ts tests/media_assets_prepare.test.ts tests/smoke.test.ts
+    npm --prefix "$cli_root" test -- --runInBand tests/token_tool.test.ts tests/embedded_paths.test.ts tests/media_assets_prepare.test.ts tests/smoke.test.ts
     ;;
   real-transport)
     echo "[cli real-transport] use products/devtools/driver/script/run_capability_probe.sh"
@@ -47,12 +52,12 @@ case "$mode" in
     "$repo_root/products/devtools/driver/script/run_capability_probe.sh"
     ;;
   acceptance)
-    npm --prefix "$repo_root/developer-tools/public/devtools" test -- --runInBand
+    npm --prefix "$cli_root" test -- --runInBand
     "$repo_root/products/devtools/driver/script/run_capability_probe.sh"
     ;;
   *)
     echo "unknown mode: $mode" >&2
-    echo "usage: ./developer-tools/public/devtools/script/test.sh [owner|publish|real-transport|e2e|two-endpoints|cli-e2e|acceptance]" >&2
+    echo "usage: ./developer-tools/devtools/script/test.sh [owner|publish|real-transport|e2e|two-endpoints|cli-e2e|acceptance]" >&2
     exit 2
     ;;
 esac

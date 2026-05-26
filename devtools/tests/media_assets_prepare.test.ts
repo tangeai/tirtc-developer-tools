@@ -25,7 +25,7 @@ describe('media assets prepare contract', () => {
         overwrite: true,
       },
       {
-        repoRoot: path.resolve(__dirname, '../../../..'),
+        repoRoot: path.resolve(__dirname, '../../..'),
         execFile: async (file, args) => {
           calledFile = file;
           calledArgs = args;
@@ -42,7 +42,7 @@ describe('media assets prepare contract', () => {
 
     expect(calledFile).toBe('bash');
     expect(calledArgs).toEqual([
-      path.resolve(__dirname, '../../../../runtime/script/prepare_runtime_media_dataset.sh'),
+      path.resolve(__dirname, '../../../runtime/script/prepare_runtime_media_dataset.sh'),
       '--source',
       path.resolve(sourcePath),
       '--output-root',
@@ -69,7 +69,7 @@ describe('media assets prepare contract', () => {
           outputRoot,
         },
         {
-          repoRoot: path.resolve(__dirname, '../../../..'),
+          repoRoot: path.resolve(__dirname, '../../..'),
           execFile: async () => {
             const error = new Error('failed');
             Object.assign(error, {
@@ -96,7 +96,7 @@ describe('media assets prepare contract', () => {
           outputRoot,
         },
         {
-          repoRoot: path.resolve(__dirname, '../../../..'),
+          repoRoot: path.resolve(__dirname, '../../..'),
           execFile: async () => {
             const error = new Error('failed');
             Object.assign(error, {
@@ -129,7 +129,7 @@ describe('media assets prepare contract', () => {
         outputRoot,
       },
       {
-        repoRoot: path.resolve(__dirname, '../../../..'),
+        repoRoot: path.resolve(__dirname, '../../..'),
         progress: (message) => {
           progressMessages.push(message);
         },

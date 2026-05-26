@@ -7,7 +7,7 @@ CLI_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 usage() {
   cat <<'USAGE'
 Usage:
-  ./developer-tools/public/devtools/script/package_token_issue_assets.sh [--skip-build]
+  ./developer-tools/devtools/script/package_token_issue_assets.sh [--skip-build]
 USAGE
 }
 

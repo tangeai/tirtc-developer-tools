@@ -11,7 +11,7 @@ import {
 describe('embedded paths', () => {
   it('prefers the workspace repo over vendored staging when running inside the repo', () => {
     const packageRoot = path.resolve(__dirname, '..');
-    const repoRoot = path.resolve(packageRoot, '../../..');
+    const repoRoot = path.resolve(packageRoot, '../..');
 
     expect(resolveCliPackageRoot(__dirname)).toBe(packageRoot);
     expect(resolveWorkspaceRepoRoot(__dirname)).toBe(repoRoot);

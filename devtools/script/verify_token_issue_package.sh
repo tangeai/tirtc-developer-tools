@@ -8,7 +8,7 @@ REPO_ROOT=$(cd "$CLI_ROOT/../.." && pwd)
 usage() {
   cat <<'USAGE'
 Usage:
-  ./developer-tools/public/devtools/script/verify_token_issue_package.sh <package.tgz>
+  ./developer-tools/devtools/script/verify_token_issue_package.sh <package.tgz>
 USAGE
 }
 

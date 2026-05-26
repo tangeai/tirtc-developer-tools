@@ -110,6 +110,6 @@ describe('token tool', () => {
   it('uses the CLI token issue provider', () => {
     const resolved = resolveIssueTokenEnvironment();
     expect(resolved.runtimePlatform).toBe('node');
-    expect(resolved.provider).toBe('developer-tools/public/devtools');
+    expect(resolved.provider).toBe('developer-tools/devtools');
   });
 });

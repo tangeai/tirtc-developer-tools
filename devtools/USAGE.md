@@ -3,9 +3,9 @@
 ## Build
 
 ```sh
-npm --prefix developer-tools/public/devtools ci
-npm --prefix developer-tools/public/devtools run build
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --help
+npm --prefix devtools ci
+npm --prefix devtools run build
+node devtools/bin/tirtc-devtools-cli.js --help
 ```
 
 ## Global
@@ -28,7 +28,7 @@ export TIRTC_APP_ID="<APP_ID>"
 export TIRTC_DEVICE_ID="<REMOTE_ID>"
 export TIRTC_ENDPOINT="<SERVICE_ENTRY>"
 
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json token issue <REMOTE_ID> \
+node devtools/bin/tirtc-devtools-cli.js --json token issue <REMOTE_ID> \
   --endpoint <ENDPOINT>
 
 ./script/issue_devtools_token.sh --token-only
@@ -61,20 +61,20 @@ TiRTC token has anti-replay semantics. Treat every token as single-use and issue
 ## License QR
 
 ```sh
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json license qrcode <LICENSE> --endpoint <ENDPOINT>
+node devtools/bin/tirtc-devtools-cli.js --json license qrcode <LICENSE> --endpoint <ENDPOINT>
 ```
 
 ## Assets
 
 ```sh
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json assets prepare
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json assets prepare --source runtime/assets/source.mp4
+node devtools/bin/tirtc-devtools-cli.js --json assets prepare
+node devtools/bin/tirtc-devtools-cli.js --json assets prepare --source runtime/assets/source.mp4
 ```
 
 Prepare any MP4 and use the returned `data.manifest_path` as `device start --source`:
 
 ```sh
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json assets prepare \
+node devtools/bin/tirtc-devtools-cli.js --json assets prepare \
   --source ./movie.mp4 \
   --output-root .build/tirtc-assets
 ```
@@ -102,7 +102,7 @@ export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
 export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 export TIRTC_APP_ID="<APP_ID>"
 
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json token issue "$TIRTC_DEVICE_ID" \
+node devtools/bin/tirtc-devtools-cli.js --json token issue "$TIRTC_DEVICE_ID" \
   --endpoint "$TIRTC_ENDPOINT" \
   > .build/devtools-client-token.json
 ```
@@ -110,7 +110,7 @@ node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json token issu
 Run one device with the default prepared asset:
 
 ```sh
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json device start \
+node devtools/bin/tirtc-devtools-cli.js --json device start \
   --video-codec h264 \
   --artifact-root .build/devtools-cli/device-h264
 ```
@@ -118,7 +118,7 @@ node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json device sta
 Run one device from a prepared MP4 and write a local client bootstrap:
 
 ```sh
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json device start \
+node devtools/bin/tirtc-devtools-cli.js --json device start \
   --source .build/tirtc-assets/manifest.json \
   --video-codec h264 \
   --client-token-json .build/devtools-client-token.json \
@@ -156,7 +156,7 @@ slice.
 ## Client
 
 ```sh
-node developer-tools/public/devtools/bin/tirtc-devtools-cli.js --json client start \
+node devtools/bin/tirtc-devtools-cli.js --json client start \
   --bootstrap .build/devtools-cli/device-h264/bootstrap.json \
   --artifact-root .build/devtools-cli/client-h264
 ```
