@@ -51,5 +51,5 @@ else
   out_dir="$repo_root/.build/token-issuer/bin/$platform"
 fi
 mkdir -p "$out_dir"
-(cd "$issuer_root" && go build -o "$out_dir/tirtc-issuer-cli" ./cmd/tirtc-issuer-cli)
+(cd "$issuer_root" && go build -o "$out_dir/tirtc-issuer-cli" .)
 echo "$out_dir/tirtc-issuer-cli"

@@ -1,4 +1,4 @@
-package issuer
+package main
 
 import (
 	"encoding/base64"

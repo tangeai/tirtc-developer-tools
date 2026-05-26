@@ -1,4 +1,4 @@
-package issuer
+package main
 
 import (
 	"crypto/hmac"

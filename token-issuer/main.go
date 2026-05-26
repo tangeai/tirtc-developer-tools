@@ -11,8 +11,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/tangeai/tirtc-developer-tools/token-issuer/internal/issuer"
 )
 
 const (
@@ -28,7 +26,7 @@ type outputEnvelope struct {
 }
 
 type errorPayload struct {
-	Code    issuer.ReasonCode `json:"code"`
+	Code    ReasonCode        `json:"code"`
 	Message string            `json:"message"`
 	Data    map[string]string `json:"data,omitempty"`
 }
@@ -46,9 +44,9 @@ type secretConfig struct {
 }
 
 type tokenResponse struct {
-	Token       string        `json:"token"`
-	Payload     issuer.Claims `json:"payload"`
-	PayloadJSON string        `json:"payloadJson,omitempty"`
+	Token       string `json:"token"`
+	Payload     Claims `json:"payload"`
+	PayloadJSON string `json:"payloadJson,omitempty"`
 }
 
 func main() {
@@ -69,7 +67,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "usage: tirtc-issuer-cli issue|serve")
 		return 0
 	default:
-		writeError(stdout, stderr, false, issuer.Invalid("command", "unknown command: "+args[0]))
+		writeError(stdout, stderr, false, Invalid("command", "unknown command: "+args[0]))
 		return 2
 	}
 }
@@ -79,7 +77,7 @@ func runIssue(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	remoteID := fs.String("remote-id", "", "remote id to connect")
 	subject := fs.String("subject", "", "token subject")
-	ttlSeconds := fs.Int64("ttl-seconds", issuer.DefaultTTLSeconds, "token ttl seconds")
+	ttlSeconds := fs.Int64("ttl-seconds", DefaultTTLSeconds, "token ttl seconds")
 	accessKeyID := fs.String("access-key-id", "", "access key id")
 	secretKeyID := fs.String("secret-key-id", "", "secret key id")
 	deviceSecretKey := fs.String("device-secret-key", "", "device secret key")
@@ -89,7 +87,7 @@ func runIssue(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	config := resolveSecretConfig(*accessKeyID, *secretKeyID, *deviceSecretKey)
-	result, err := issuer.Sign(issuer.SigningInput{
+	result, err := Sign(SigningInput{
 		RemoteID:        strings.TrimSpace(*remoteID),
 		Subject:         strings.TrimSpace(*subject),
 		TTLSeconds:      *ttlSeconds,
@@ -107,7 +105,7 @@ func runIssue(args []string, stdout io.Writer, stderr io.Writer) int {
 	if *jsonOutput {
 		payloadJSON, err := json.Marshal(result.Claims)
 		if err != nil {
-			return writeError(stdout, stderr, true, issuer.Internal("failed to encode claims"))
+			return writeError(stdout, stderr, true, Internal("failed to encode claims"))
 		}
 		writeJSON(stdout, outputEnvelope{
 			Code:    0,
@@ -133,7 +131,7 @@ func runServe(args []string, stdout io.Writer, stderr io.Writer) int {
 	host := fs.String("host", defaultHost, "listen host")
 	port := fs.Int("port", defaultPort, "listen port")
 	subject := fs.String("subject", "", "default token subject")
-	ttlSeconds := fs.Int64("ttl-seconds", issuer.DefaultTTLSeconds, "default token ttl seconds")
+	ttlSeconds := fs.Int64("ttl-seconds", DefaultTTLSeconds, "default token ttl seconds")
 	accessKeyID := fs.String("access-key-id", "", "access key id")
 	secretKeyID := fs.String("secret-key-id", "", "secret key id")
 	deviceSecretKey := fs.String("device-secret-key", "", "device secret key")
@@ -141,7 +139,7 @@ func runServe(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 2
 	}
 	config := resolveSecretConfig(*accessKeyID, *secretKeyID, *deviceSecretKey)
-	if err := issuer.ValidateInput(issuer.SigningInput{
+	if err := ValidateInput(SigningInput{
 		RemoteID:        "preflight",
 		Subject:         strings.TrimSpace(*subject),
 		TTLSeconds:      *ttlSeconds,
@@ -158,41 +156,41 @@ func runServe(args []string, stdout io.Writer, stderr io.Writer) int {
 	addr := fmt.Sprintf("%s:%d", strings.TrimSpace(*host), *port)
 	fmt.Fprintln(stderr, "[tirtc-issuer] listening on "+addr+"; secrets loaded from env/flags")
 	if err := http.ListenAndServe(addr, mux); err != nil {
-		return writeError(stdout, stderr, false, issuer.Internal("issuer server failed"))
+		return writeError(stdout, stderr, false, Internal("issuer server failed"))
 	}
 	return 0
 }
 
 func handleTokenRequest(response http.ResponseWriter, request *http.Request, config secretConfig, defaultSubject string, defaultTTLSeconds int64) {
 	if request.Method != http.MethodPost {
-		writeHTTPError(response, http.StatusNotFound, issuer.Invalid("path", "not found"))
+		writeHTTPError(response, http.StatusNotFound, Invalid("path", "not found"))
 		return
 	}
 	var raw map[string]json.RawMessage
 	body, err := io.ReadAll(io.LimitReader(request.Body, 4096))
 	if err != nil {
-		writeHTTPError(response, http.StatusBadRequest, issuer.Invalid("body", "failed to read request body"))
+		writeHTTPError(response, http.StatusBadRequest, Invalid("body", "failed to read request body"))
 		return
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var parsed httpTokenRequest
 	if err := decoder.Decode(&parsed); err != nil {
-		writeHTTPError(response, http.StatusBadRequest, issuer.Invalid("body", "invalid JSON request"))
+		writeHTTPError(response, http.StatusBadRequest, Invalid("body", "invalid JSON request"))
 		return
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
-		writeHTTPError(response, http.StatusBadRequest, issuer.Invalid("body", "invalid JSON request"))
+		writeHTTPError(response, http.StatusBadRequest, Invalid("body", "invalid JSON request"))
 		return
 	}
 	for field := range raw {
 		switch field {
 		case "remote_id", "subject", "ttl_seconds":
 		case "access_key_id", "secret_key_id", "device_secret_key", "secret", "authorization", "session", "tenant_id", "user_id", "owner_id", "device_acl":
-			writeHTTPError(response, http.StatusBadRequest, issuer.Invalid(field, "field is not accepted by this issuer"))
+			writeHTTPError(response, http.StatusBadRequest, Invalid(field, "field is not accepted by this issuer"))
 			return
 		default:
-			writeHTTPError(response, http.StatusBadRequest, issuer.Invalid(field, "unknown field"))
+			writeHTTPError(response, http.StatusBadRequest, Invalid(field, "unknown field"))
 			return
 		}
 	}
@@ -204,7 +202,7 @@ func handleTokenRequest(response http.ResponseWriter, request *http.Request, con
 	if strings.TrimSpace(parsed.Subject) != "" {
 		subject = strings.TrimSpace(parsed.Subject)
 	}
-	result, err := issuer.Sign(issuer.SigningInput{
+	result, err := Sign(SigningInput{
 		RemoteID:        strings.TrimSpace(parsed.RemoteID),
 		Subject:         subject,
 		TTLSeconds:      ttl,
@@ -238,10 +236,10 @@ func choose(explicit string, env string) string {
 }
 
 func writeError(stdout io.Writer, stderr io.Writer, jsonOutput bool, err error) int {
-	reason := issuer.ReasonOf(err)
+	reason := ReasonOf(err)
 	message := "internal error"
 	field := ""
-	var userErr *issuer.UserError
+	var userErr *UserError
 	if errors.As(err, &userErr) {
 		message = userErr.Message
 		field = userErr.Field
@@ -253,18 +251,18 @@ func writeError(stdout io.Writer, stderr io.Writer, jsonOutput bool, err error) 
 		if field != "" {
 			data["field"] = field
 		}
-		writeJSON(stdout, outputEnvelope{Code: issuer.ExitCode(reason), Message: message, Data: data})
+		writeJSON(stdout, outputEnvelope{Code: ExitCode(reason), Message: message, Data: data})
 	} else {
 		fmt.Fprintln(stderr, "Error ("+string(reason)+"): "+message)
 	}
-	return issuer.ExitCode(reason)
+	return ExitCode(reason)
 }
 
 func writeHTTPError(response http.ResponseWriter, status int, err error) {
-	reason := issuer.ReasonOf(err)
+	reason := ReasonOf(err)
 	message := "internal error"
 	field := ""
-	var userErr *issuer.UserError
+	var userErr *UserError
 	if errors.As(err, &userErr) {
 		message = userErr.Message
 		field = userErr.Field
