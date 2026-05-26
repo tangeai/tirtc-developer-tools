@@ -1,85 +1,145 @@
 # TiRTC DevTools CLI
 
-`devtools/` 承接 `TiRTC DevTools CLI`，是当前唯一公开 DevTools 命令行入口。
+`devtools/` 提供 `tirtc-devtools-cli`，用于 TiRTC 本地联调、二维码生成、媒体资产准备，以及标准 device / client 调试流程。
 
-## 负责什么
+常见使用场景：
 
-- `token issue` / `license qrcode`：本地联调的凭据与二维码工具。
-- `assets prepare`：把默认资产或任意 MP4 准备成 native role driver 使用的媒体资产。
-- `device start`：作为标准上行 device 启动 native DevTools driver，送出音视频，按需产出本机 `bootstrap.json` 与 execution evidence。
-- `client start`：作为标准下行 client 消费本机 `bootstrap.json` 或显式 device/token，产出 `frame_dump` 与 summary。
-- CLI 负责参数、环境变量、token 签发、JSON envelope、artifact 摘要与打包定位；真实 TiRTC lifecycle 由 `products/devtools/driver/` 承接。native role 失败且 runtime logging 已初始化时，driver 会在退出前尝试上传日志，CLI JSON 会透出 `log_id` 与 `log_upload` 结果。
+- 为客户端生成连接 Token 或二维码。
+- 启动本地 Token HTTP 服务，供示例 App 按需获取 Token。
+- 把 MP4 准备成 DevTools device 可发送的媒体资产。
+- 在支持平台上启动标准上行 device，送出音视频。
+- 在支持平台上启动标准下行 client，接收音视频并产出调试证据。
 
-## 不负责什么
+## 安装
 
-- 不在 TypeScript 中实现媒体帧队列、PTS pacing、transport attach/detach、decoder 或 render sink。
-- 不提供长驻 Host、HTTP API、共享 session 或桌面 UI。
-- 不替代业务鉴权系统；token 签发只服务 DevTools 联调与验收。
-- 不把 `bootstrap.json` 定义成移动端接入协议；它只是本机 CLI receive、sample smoke 和 validation automation 的交接产物。
-- 不提供长驻 Linux 服务端；Linux 调试发布面是 `linux-x64` native CLI/driver，运行在 Linux host 或 `linux/amd64` container。
-
-## 依赖方向
-
-- token/license 工具由 CLI 自己承接；仓库级 token helper 入口为 `./script/issue_devtools_token.sh`。
-- device/client 通过本地 native driver executable 执行，默认查找 `.build/devtools-driver/bin/<platform>/devtools_driver_probe` 或 `vendor/devtools/driver/<platform>/devtools_driver_probe`。
-- runtime bundle 默认查找 `.build/products/runtime/<platform>` 或 `vendor/runtime/<platform>`。
-
-## 常用命令
+推荐使用 npm 包：
 
 ```sh
-npm --prefix devtools run build
-npm --prefix devtools test -- --runInBand
-node devtools/bin/tirtc-devtools-cli.js --help
+npm install -g tirtc-devtools-cli
+tirtc-devtools-cli --help
 ```
 
-常用 token 自测入口：
+从源码运行：
 
 ```sh
-./script/issue_devtools_token.sh --token-only
+npm ci
+npm run build
+node bin/tirtc-devtools-cli.js --help
 ```
 
-真实 device/client 闭环优先走：
+源码运行 Token 相关命令时，如果还没有随包携带的 issuer binary，可以先在仓库根目录构建：
 
 ```sh
-products/devtools/driver/script/run_capability_probe.sh
+platform="$(../token-issuer/script/host_platform.sh)"
+../token-issuer/script/build.sh --platform "$platform"
+export TIRTC_ISSUER_CLI_PATH="$PWD/../.build/token-issuer/bin/$platform/tirtc-issuer-cli"
 ```
 
-一台电脑模拟上行端送任意 MP4：
+## 命令总览
+
+| 命令 | 用途 |
+| --- | --- |
+| `token issue` | 本地签发 TiRTC 连接 Token，并输出二维码 payload。 |
+| `token serve` | 启动本地 HTTP Token issuer 服务。 |
+| `license qrcode` | 生成 license 二维码。 |
+| `assets prepare` | 准备 DevTools device 使用的媒体资产。 |
+| `device start` | 启动标准上行 device，发送音视频。 |
+| `client start` | 启动标准下行 client，接收音视频并生成调试产物。 |
+
+所有命令都支持全局 `--json`，用于输出机器可读 envelope。人类可读日志写到 stderr，JSON 结果写到 stdout。
+
+## 签发 Token
 
 ```sh
-node devtools/bin/tirtc-devtools-cli.js --json assets prepare \
+export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
+export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
+export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
+export TIRTC_APP_ID="<APP_ID>"
+
+tirtc-devtools-cli --json token issue device-001 \
+  --endpoint "<TIRTC_ENDPOINT>"
+```
+
+源码运行：
+
+```sh
+node bin/tirtc-devtools-cli.js --json token issue device-001 \
+  --endpoint "<TIRTC_ENDPOINT>"
+```
+
+`--openapi-endpoint` 和 `TIRTC_OPEN_API_ENDPOINT` / `TIRTC_OPENAPI_ENDPOINT` 只为了兼容旧脚本而保留；当前 Token 签发是本地签名，不会回退到远端 OpenAPI。
+
+TiRTC Token 有短时和防重放语义。每次新连接都应该重新签发 Token，不要长期复用。
+
+## 启动 Token 服务
+
+```sh
+tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966
+```
+
+请求：
+
+```sh
+curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
+  -H 'Content-Type: application/json' \
+  --data '{"remote_id":"device-001"}'
+```
+
+这个服务只做 TiRTC Token 签名，不做登录鉴权、租户鉴权或用户设备归属鉴权。真实业务系统必须在调用它之前完成授权。
+
+## 准备媒体资产
+
+```sh
+tirtc-devtools-cli --json assets prepare \
   --source ./movie.mp4 \
   --output-root .build/tirtc-assets
-node devtools/bin/tirtc-devtools-cli.js --json device start \
-  --source .build/tirtc-assets/manifest.json \
-  --video-codec h264 \
-  --artifact-root .build/devtools-cli/device-movie-h264
 ```
 
-`device start` 默认持续运行直到用户结束进程；需要自动化限时时再显式传
-`--duration-ms <ms>`。运行期间 CLI 会把启动、listener ready、client 连接 / 断开、
-首个音视频包与周期运行状态写到 stderr；`--json` 的结构化 envelope 仍只写 stdout。
-prepared asset 会按完整音视频轨循环，任一轨到达源文件末尾时 audio/video 同步回到
-源头并保持 PTS 继续递增。
+输出里的 `manifest_path` 可以传给 `device start --source`。
 
-`device start` 的启动成功条件是 device listener 已就绪；客户端是否已经扫码连接不属于
-device 启动失败条件。没有 client 时命令会继续常驻，直到用户结束进程或显式
-`--duration-ms` 到期，summary 中 `media_send` 会保持未开始或标记为跳过。有 client
-连接时 driver 会把该连接挂到共享音视频输入上；client 断开后，device 会清理该连接，
-并继续接受新的连接。若旧连接的断开回调尚未到达，新连接也会立即挂载并收到同一组
-音视频输入的数据。
-
-native role 失败时，`reason_code` 与 `failed_stage` 仍是主失败事实；`log_upload`
-只说明失败现场日志是否已上传。上传成功时，CLI JSON 与 `summary.json` 会包含
-可用于后续抓取的 `log_id`。
-
-`device start` 与 `client start` 启动的 native role 默认 echo 收到的 command：
-收到任意 command 后，用同一个 command id 与同一 payload 原样回发。CLI 不新增
-额外控制命令或开关；`summary.json` 与 `--json` envelope 会包含 `command_echo`
-evidence，用于确认 command 收发面已被覆盖。
-
-打包入口：
+## 启动 device
 
 ```sh
-npm --prefix devtools run package
+export TIRTC_DEVICE_ID="<DEVICE_ID>"
+export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
+export TIRTC_ENDPOINT="<TIRTC_ENDPOINT>"
+
+tirtc-devtools-cli --json device start \
+  --source .build/tirtc-assets/manifest.json \
+  --video-codec h264 \
+  --artifact-root .build/devtools-cli/device-h264
 ```
+
+`device start` 默认持续运行，直到你结束进程。需要自动化限时时再传 `--duration-ms <ms>`。
+
+device 启动成功的条件是 listener ready；没有 client 连接不算启动失败。client 连接后，native driver 会发送音视频，并在 artifact 目录写入 summary 和运行证据。
+
+## 启动 client
+
+本地 device / client 闭环通常先让 device 写出 `bootstrap.json`，再让 client 消费它：
+
+```sh
+tirtc-devtools-cli --json client start \
+  --bootstrap .build/devtools-cli/device-h264/bootstrap.json \
+  --artifact-root .build/devtools-cli/client-h264
+```
+
+client 会写出 `summary.json`、`events.jsonl`、runtime logs，以及首帧渲染相关产物。`bootstrap.json` 只是 DevTools 本机联调产物，不是移动端 SDK 接入协议。
+
+## 平台和打包
+
+当前公开包重点支持：
+
+- `macos-arm64`
+- `linux-x64`
+
+已发布 npm 包会携带对应平台的 issuer binary、native driver 和 runtime bundle。源码 checkout 默认不提交这些大型运行资产；维护者可以通过 package 脚本在具备完整 runtime 输入的环境中重新 staging：
+
+```sh
+npm run package
+```
+
+## 继续阅读
+
+- [USAGE.md](USAGE.md)：更完整的命令示例。
+- [../token-issuer/README.md](../token-issuer/README.md)：Token 签名工具和 HTTP issuer 服务。

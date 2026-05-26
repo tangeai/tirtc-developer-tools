@@ -1,22 +1,31 @@
-# TiRTC DevTools CLI Usage
+# TiRTC DevTools CLI 使用说明
 
-## Build
+这份文档按任务列出常用命令。第一次使用建议先读 [README.md](README.md)。
+
+## 构建和查看帮助
 
 ```sh
-npm --prefix devtools ci
-npm --prefix devtools run build
-node devtools/bin/tirtc-devtools-cli.js --help
+npm ci
+npm run build
+node bin/tirtc-devtools-cli.js --help
 ```
 
-## Global
+全局安装后：
 
-- `--json` prints a machine-readable envelope.
-- `--version` prints CLI version and native driver contract version.
+```sh
+npm install -g tirtc-devtools-cli
+tirtc-devtools-cli --help
+```
 
-## Platform Support
+## 全局选项
 
-- `macos-arm64`: supported for token, assets prepare, device, client, package smoke, and native device+client qualification.
-- `linux-x64`: supported for token, assets prepare, device, client, package smoke, and native driver packaging. Linux native device/client runs through the packaged headless driver on Linux hosts or `linux/amd64` containers.
+- `--json`：输出机器可读 JSON envelope，适合脚本集成。
+- `--version`：输出 CLI 版本和 native driver contract version。
+
+## 平台支持
+
+- `macos-arm64`：支持 Token、资产准备、device、client、package smoke 和 native device / client qualification。
+- `linux-x64`：支持 Token、资产准备、device、client、package smoke 和 native driver packaging。Linux native device / client 运行在 Linux host 或 `linux/amd64` container。
 
 ## Token
 
@@ -25,18 +34,27 @@ export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
 export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
 export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 export TIRTC_APP_ID="<APP_ID>"
-export TIRTC_DEVICE_ID="<REMOTE_ID>"
-export TIRTC_ENDPOINT="<SERVICE_ENTRY>"
 
-node devtools/bin/tirtc-devtools-cli.js --json token issue <REMOTE_ID> \
-  --endpoint <ENDPOINT>
-
-./script/issue_devtools_token.sh --token-only
+tirtc-devtools-cli --json token issue <REMOTE_ID> \
+  --endpoint "<TIRTC_ENDPOINT>"
 ```
 
-`--openapi-endpoint` is accepted only for compatibility with older scripts. Token signing is local and does not call a remote OpenAPI service.
+源码运行：
 
-`token issue` preserves the public JSON envelope:
+```sh
+node bin/tirtc-devtools-cli.js --json token issue <REMOTE_ID> \
+  --endpoint "<TIRTC_ENDPOINT>"
+```
+
+如果源码模式下没有随包携带的 issuer binary，先在仓库根目录构建 `token-issuer`，并设置：
+
+```sh
+export TIRTC_ISSUER_CLI_PATH="<repo>/.build/token-issuer/bin/<platform>/tirtc-issuer-cli"
+```
+
+`--openapi-endpoint` 只为了兼容旧脚本而保留。当前 Token 签发是本地签名，不会调用远端 OpenAPI。
+
+输出 envelope 示例：
 
 ```json
 {
@@ -47,7 +65,7 @@ node devtools/bin/tirtc-devtools-cli.js --json token issue <REMOTE_ID> \
       "app_id": "APP",
       "remote_id": "REMOTE",
       "token": "<TOKEN>",
-      "endpoint": "http://..."
+      "endpoint": "https://..."
     },
     "payloadJson": "{\"app_id\":\"APP\",\"remote_id\":\"REMOTE\",\"token\":\"<TOKEN>\"}",
     "token": "<TOKEN>",
@@ -56,128 +74,105 @@ node devtools/bin/tirtc-devtools-cli.js --json token issue <REMOTE_ID> \
 }
 ```
 
-TiRTC token has anti-replay semantics. Treat every token as single-use and issue a fresh token for every new connection.
+每次新连接都应该重新签发 Token，不要长期复用。
+
+## Token HTTP 服务
+
+```sh
+tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966
+```
+
+```sh
+curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
+  -H 'Content-Type: application/json' \
+  --data '{"remote_id":"device-001"}'
+```
+
+HTTP 服务不会做业务鉴权。请把登录态、租户、用户设备归属判断放在你的业务服务里。
 
 ## License QR
 
 ```sh
-node devtools/bin/tirtc-devtools-cli.js --json license qrcode <LICENSE> --endpoint <ENDPOINT>
+tirtc-devtools-cli --json license qrcode <LICENSE> \
+  --endpoint "<TIRTC_ENDPOINT>"
 ```
 
-## Assets
+## 资产准备
+
+准备默认资产：
 
 ```sh
-node devtools/bin/tirtc-devtools-cli.js --json assets prepare
-node devtools/bin/tirtc-devtools-cli.js --json assets prepare --source runtime/assets/source.mp4
+tirtc-devtools-cli --json assets prepare
 ```
 
-Prepare any MP4 and use the returned `data.manifest_path` as `device start --source`:
+准备指定 MP4：
 
 ```sh
-node devtools/bin/tirtc-devtools-cli.js --json assets prepare \
+tirtc-devtools-cli --json assets prepare \
   --source ./movie.mp4 \
   --output-root .build/tirtc-assets
 ```
 
+命令会返回 `manifest_path`。后续 `device start` 使用这个路径作为 `--source`。
+
 ## Device
 
-Device startup requires:
+device 启动前需要：
 
 ```sh
 export TIRTC_DEVICE_ID="<DEVICE_ID>"
 export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
-export TIRTC_ENDPOINT="<SERVICE_ENTRY>"
+export TIRTC_ENDPOINT="<TIRTC_ENDPOINT>"
 ```
 
-These can also be passed explicitly with `--device-id`, `--device-secret-key`,
-and `--endpoint`. Missing values fail during CLI preflight before the native
-driver starts.
+也可以通过 `--device-id`、`--device-secret-key`、`--endpoint` 显式传入。
 
-If the local `client start --bootstrap` flow is needed, issue a fresh client
-token first:
+启动一个 device：
 
 ```sh
-export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
-export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
-export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
-export TIRTC_APP_ID="<APP_ID>"
-
-node devtools/bin/tirtc-devtools-cli.js --json token issue "$TIRTC_DEVICE_ID" \
-  --endpoint "$TIRTC_ENDPOINT" \
-  > .build/devtools-client-token.json
-```
-
-Run one device with the default prepared asset:
-
-```sh
-node devtools/bin/tirtc-devtools-cli.js --json device start \
+tirtc-devtools-cli --json device start \
+  --source .build/tirtc-assets/manifest.json \
   --video-codec h264 \
   --artifact-root .build/devtools-cli/device-h264
 ```
 
-Run one device from a prepared MP4 and write a local client bootstrap:
+默认情况下，`device start` 会一直运行到你结束进程。自动化场景可以传 `--duration-ms <ms>`。
+
+`device start` 的启动成功条件是 listener ready。没有 client 连接不算 device 启动失败；没有 client 时进程会继续等待。
+
+如果需要本机 client 消费 device 输出，可以先生成 client token JSON：
 
 ```sh
-node devtools/bin/tirtc-devtools-cli.js --json device start \
+tirtc-devtools-cli --json token issue "$TIRTC_DEVICE_ID" \
+  --endpoint "$TIRTC_ENDPOINT" \
+  > .build/devtools-client-token.json
+```
+
+然后让 device 写出本机交接文件：
+
+```sh
+tirtc-devtools-cli --json device start \
   --source .build/tirtc-assets/manifest.json \
   --video-codec h264 \
   --client-token-json .build/devtools-client-token.json \
-  --artifact-root .build/devtools-cli/device-movie-h264
+  --artifact-root .build/devtools-cli/device-h264
 ```
 
-By default `device start` keeps running until the process is stopped. Use
-`--duration-ms <ms>` only for bounded automation. Prepared assets loop over the
-full audio/video source cycle; when either track reaches the source end, both
-tracks restart from offset 0 while PTS keeps increasing.
-
-While the device process is running, CLI writes human-readable lifecycle logs to
-stderr: startup, listener readiness, client connect/disconnect, first audio/video
-packet, and periodic running status. With `--json`, the final machine-readable
-envelope remains on stdout.
-
-`device start` is considered started once the device listener is ready. A
-missing client is not a device startup failure. Without a connected client, the
-process remains resident until it is stopped or an explicit `--duration-ms`
-deadline is reached.
-
-`device start` writes `bootstrap.json` only when `--client-token-json` is
-provided. That file is a local handoff artifact for CLI client, runtime sample
-smoke, and validation automation. The token in that bootstrap is intended for
-one client connection.
-
-`device start` starts a native role that echoes every received command with the
-same command id and payload. No extra CLI command or option is required.
-`summary.json` and the `--json` envelope include `command_echo` evidence.
-
-`bootstrap.json` is not a mobile SDK connection protocol. For phone debugging,
-use token/license QR today; a full session QR or deeplink is a separate product
-slice.
+`bootstrap.json` 是 DevTools 本机联调产物，不是移动端 SDK 接入协议。
 
 ## Client
 
 ```sh
-node devtools/bin/tirtc-devtools-cli.js --json client start \
+tirtc-devtools-cli --json client start \
   --bootstrap .build/devtools-cli/device-h264/bootstrap.json \
   --artifact-root .build/devtools-cli/client-h264
 ```
 
-Client writes `summary.json`, `events.jsonl`, runtime logs, and `render/first-video-frame.*` for `frame_dump`.
+client 会写出：
 
-The native client role also echoes every received command with the same command
-id and payload. `summary.json` and the `--json` envelope include `command_echo`
-evidence, so command receive and reply coverage is visible in normal CLI
-artifacts.
+- `summary.json`
+- `events.jsonl`
+- runtime logs
+- `render/first-video-frame.*`
 
-`client start --bootstrap` is meant for the local computer-to-computer DevTools
-flow. Mobile clients should not be required to fetch a local JSON file from the
-developer machine.
-
-## Codec Matrix
-
-For the current macOS gate, use the native capability runner:
-
-```sh
-products/devtools/driver/script/run_capability_probe.sh
-```
-
-It runs H264, H265, and MJPEG device+client with a fresh token per case.
+native client role 会 echo 收到的 command，并在 `summary.json` 和 `--json` envelope 中记录 `command_echo` evidence。
