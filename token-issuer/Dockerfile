@@ -1,7 +1,8 @@
 FROM golang:1.22-alpine AS build
 WORKDIR /src
 COPY go.mod ./
-COPY *.go ./
+COPY main.go ./
+COPY issuer ./issuer
 RUN go build -o /out/tirtc-issuer-cli .
 
 FROM alpine:3.20

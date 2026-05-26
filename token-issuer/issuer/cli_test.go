@@ -1,4 +1,4 @@
-package main
+package issuer
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ func TestIssueJSONUsesFlagOverEnvAndRedactsErrors(t *testing.T) {
 	t.Setenv("TIRTC_DEVICE_SECRET_KEY", "env-device-secret")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := run([]string{
+	code := Run([]string{
 		"issue",
 		"--remote-id", "device-001",
 		"--access-key-id", "flag-ak",
