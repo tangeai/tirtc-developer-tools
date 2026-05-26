@@ -27,7 +27,9 @@ case "$PLATFORM" in
     ;;
 esac
 
-python3 "$SCRIPT_DIR/verify_reason_taxonomy.py" >&2
+if [[ "${TIRTC_DEVTOOLS_DRIVER_SKIP_TAXONOMY_VERIFY:-0}" != "1" ]]; then
+  python3 "$SCRIPT_DIR/verify_reason_taxonomy.py" >&2
+fi
 
 resolve_runtime_root() {
   local explicit="${TIRTC_DEVTOOLS_RUNTIME_SDK_DIR:-${TIRTC_RUNTIME_SDK_DIR:-${TIRTC_RUNTIME_BUNDLE_ROOT:-}}}"
@@ -98,6 +100,52 @@ for path in "${required[@]}"; do
     exit 3
   fi
 done
+
+host_os="$(uname -s)"
+if [[ "$PLATFORM" == "linux-x64" && "$host_os" != "Linux" ]]; then
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "[devtools-driver-probe] docker is required to build linux-x64 driver on $host_os" >&2
+    exit 3
+  fi
+
+  linux_image="${TIRTC_DEVTOOLS_LINUX_BUILD_IMAGE:-}"
+  if [[ -z "$linux_image" ]]; then
+    if docker image inspect matrix/linux-build:runtime-release >/dev/null 2>&1; then
+      linux_image="matrix/linux-build:runtime-release"
+    else
+      linux_image="gcc:13"
+    fi
+  fi
+
+  docker_args=(
+    run
+    --rm
+    --platform linux/amd64
+    -e TIRTC_RUNTIME_PLATFORM="$PLATFORM"
+    -e TIRTC_DEVTOOLS_RUNTIME_SDK_DIR="$RUNTIME_ROOT"
+    -e TIRTC_DEVTOOLS_DRIVER_OUTPUT_DIR="$OUTPUT_DIR"
+    -e TIRTC_DEVTOOLS_DRIVER_SKIP_TAXONOMY_VERIFY=1
+    -v "$DEVTOOLS_ROOT:$DEVTOOLS_ROOT"
+    -w "$DEVTOOLS_ROOT"
+  )
+  case "$RUNTIME_ROOT" in
+    "$DEVTOOLS_ROOT"/*)
+      ;;
+    *)
+      docker_args+=(-v "$RUNTIME_ROOT:$RUNTIME_ROOT:ro")
+      ;;
+  esac
+  case "$OUTPUT_DIR" in
+    "$DEVTOOLS_ROOT"/*)
+      ;;
+    *)
+      mkdir -p "$OUTPUT_DIR"
+      docker_args+=(-v "$OUTPUT_DIR:$OUTPUT_DIR")
+      ;;
+  esac
+  docker "${docker_args[@]}" "$linux_image" bash "$SCRIPT_DIR/build.sh"
+  exit 0
+fi
 
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
