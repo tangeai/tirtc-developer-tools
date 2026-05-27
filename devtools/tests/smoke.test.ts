@@ -52,6 +52,9 @@ describe('tirtc-devtools-cli smoke test', () => {
     expect(output).toContain('Usage: tirtc-devtools-cli token serve [options]');
     expect(output).toContain('--host <host>');
     expect(output).toContain('--port <port>');
+    expect(output).toContain('--app-id <appId>');
+    expect(output).toContain('--remote-id <remoteId>');
+    expect(output).toContain('--issuer-url <url>');
     expect(output).toContain('does not implement login');
   });
 

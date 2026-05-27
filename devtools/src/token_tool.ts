@@ -44,13 +44,37 @@ export type LicenseQrcodeInput = {
   asciiMaxColumns?: number;
 };
 
+export type IssuerServiceQrcodeInput = {
+  appId: string;
+  remoteId: string;
+  tokenIssuerUrl: string;
+  endpoint?: string;
+  qrErrorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+  asciiMaxColumns?: number;
+};
+
 export type LicenseQrcodePayload = {
   license: string;
   endpoint?: string;
 };
 
+export type IssuerServiceQrcodePayload = {
+  app_id: string;
+  remote_id: string;
+  token_issuer_url: string;
+  endpoint?: string;
+};
+
 export type LicenseQrcodeOutput = {
   payload: LicenseQrcodePayload;
+  payloadJson: string;
+  qrCodePngPath: string;
+  qrCodeAscii: string;
+  qrCodeAsciiIncluded: boolean;
+};
+
+export type IssuerServiceQrcodeOutput = {
+  payload: IssuerServiceQrcodePayload;
   payloadJson: string;
   qrCodePngPath: string;
   qrCodeAscii: string;
@@ -91,6 +115,10 @@ function buildTokenQrCodePngPath(payload: IssuedTokenPayload): string {
 
 function buildLicenseQrCodePngPath(payload: LicenseQrcodePayload): string {
   return buildQrCodePngPath('license', payload.license);
+}
+
+function buildIssuerServiceQrCodePngPath(payload: IssuerServiceQrcodePayload): string {
+  return buildQrCodePngPath('token-service', payload.remote_id);
 }
 
 export function resolveIssueTokenEnvironment(): {
@@ -296,6 +324,21 @@ export function buildLicenseQrcodePayload(input: LicenseQrcodeInput): LicenseQrc
   return payload;
 }
 
+export function buildIssuerServiceQrcodePayload(input: IssuerServiceQrcodeInput): IssuerServiceQrcodePayload {
+  const payload: IssuerServiceQrcodePayload = {
+    app_id: input.appId.trim(),
+    remote_id: input.remoteId.trim(),
+    token_issuer_url: input.tokenIssuerUrl.trim(),
+  };
+
+  const normalizedEndpoint = input.endpoint?.trim();
+  if (normalizedEndpoint) {
+    payload.endpoint = normalizedEndpoint;
+  }
+
+  return payload;
+}
+
 export async function writePngQrcode(
   payloadJson: string,
   outputPath: string,
@@ -350,6 +393,25 @@ export async function issueTokenWithQrcode(input: TokenIssueInput): Promise<Toke
   };
 }
 
+export async function buildIssuerServiceQrcode(input: IssuerServiceQrcodeInput): Promise<IssuerServiceQrcodeOutput> {
+  const payload = buildIssuerServiceQrcodePayload(input);
+  const payloadJson = JSON.stringify(payload);
+  const qrErrorCorrectionLevel = input.qrErrorCorrectionLevel ?? 'M';
+  const qrCodePngPath = await writePngQrcode(
+    payloadJson,
+    buildIssuerServiceQrCodePngPath(payload),
+    qrErrorCorrectionLevel,
+  );
+  const qrCodeAscii = await buildAsciiQrcode(payloadJson, input.asciiMaxColumns, qrErrorCorrectionLevel);
+  return {
+    payload,
+    payloadJson,
+    qrCodePngPath,
+    qrCodeAscii,
+    qrCodeAsciiIncluded: !qrCodeAscii.startsWith('(omitted:'),
+  };
+}
+
 export async function buildLicenseQrcode(input: LicenseQrcodeInput): Promise<LicenseQrcodeOutput> {
   const payload = buildLicenseQrcodePayload(input);
   const payloadJson = JSON.stringify(payload);
@@ -367,6 +429,27 @@ export async function buildLicenseQrcode(input: LicenseQrcodeInput): Promise<Lic
     qrCodeAscii,
     qrCodeAsciiIncluded: !qrCodeAscii.startsWith('(omitted:'),
   };
+}
+
+export function formatIssuerServiceQrcodeConsoleOutput(output: IssuerServiceQrcodeOutput): string {
+  const summaryLines = [
+    'Token Issuer Service QR Code Summary:',
+    '  app_id: ' + output.payload.app_id,
+    '  remote_id: ' + output.payload.remote_id,
+    '  token_issuer_url: ' + output.payload.token_issuer_url,
+    '  endpoint: ' + (output.payload.endpoint ?? '(omitted)'),
+    '',
+    'Payload JSON:',
+    JSON.stringify(output.payload, null, 2),
+    '',
+    'QR Code ASCII:',
+    output.qrCodeAscii,
+    '',
+    'QR Code PNG:',
+    output.qrCodePngPath,
+  ];
+
+  return summaryLines.join('\n');
 }
 
 export function formatTokenIssueConsoleOutput(output: TokenIssueOutput): string {

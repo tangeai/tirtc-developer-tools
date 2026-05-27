@@ -32,8 +32,13 @@ export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
 export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
 export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 
-tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966
+tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966 \
+  --app-id "$TIRTC_APP_ID" \
+  --remote-id "device-001" \
+  --issuer-url "http://<your-lan-ip>:8966/v1/tokens"
 ```
+
+传入 `app-id` 和 `remote-id` 后，命令会在服务启动成功时输出 Flutter example 可扫码二维码。手机扫码时建议用 `--issuer-url` 填写电脑的局域网地址。
 
 ```sh
 curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
