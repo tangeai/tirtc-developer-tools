@@ -26,10 +26,12 @@ type CliError = {
 type TokenIssueCliParams = {
   accessKeyId: string;
   secretKeyId: string;
-  deviceSecretKey: string;
+  deviceSecretKey?: string;
+  deviceSecretMap?: string;
   accessKeyIdFromEnv?: boolean;
   secretKeyIdFromEnv?: boolean;
   deviceSecretKeyFromEnv?: boolean;
+  deviceSecretMapFromEnv?: boolean;
   appId: string;
   remoteId: string;
   openapiEndpoint?: string;
@@ -44,6 +46,7 @@ type TokenIssueCommandOptions = {
   accessKeyId?: string;
   secretKeyId?: string;
   deviceSecretKey?: string;
+  deviceSecretMap?: string;
   appId?: string;
   openapiEndpoint?: string;
   endpoint?: string;
@@ -61,6 +64,7 @@ type TokenServeCommandOptions = {
   accessKeyId?: string;
   secretKeyId?: string;
   deviceSecretKey?: string;
+  deviceSecretMap?: string;
   appId?: string;
   remoteId?: string;
   endpoint?: string;
@@ -85,6 +89,7 @@ type LicenseQrcodeCommandOptions = {
 const kTokenIssueAccessKeyIdEnvVar = 'TIRTC_ACCESS_KEY_ID';
 const kTokenIssueSecretKeyIdEnvVar = 'TIRTC_SECRET_KEY_ID';
 const kTokenIssueDeviceSecretKeyEnvVar = 'TIRTC_DEVICE_SECRET_KEY';
+const kTokenIssueDeviceSecretMapEnvVar = 'TIRTC_DEVICE_SECRET_MAP';
 const kTokenIssueAppIdEnvVar = 'TIRTC_APP_ID';
 const kTokenIssueRemoteIdEnvVar = 'TIRTC_DEVICE_ID';
 const kTokenIssueSubjectEnvVar = 'TIRTC_TOKEN_SUBJECT';
@@ -155,9 +160,11 @@ async function runTokenIssue(params: TokenIssueCliParams, options: CliOptions): 
       accessKeyId: params.accessKeyId,
       secretKeyId: params.secretKeyId,
       deviceSecretKey: params.deviceSecretKey,
+      deviceSecretMap: params.deviceSecretMap,
       accessKeyIdFromEnv: params.accessKeyIdFromEnv,
       secretKeyIdFromEnv: params.secretKeyIdFromEnv,
       deviceSecretKeyFromEnv: params.deviceSecretKeyFromEnv,
+      deviceSecretMapFromEnv: params.deviceSecretMapFromEnv,
       appId: params.appId,
       remoteId: params.remoteId,
       endpoint: params.endpoint,
@@ -249,6 +256,43 @@ function resolveOptionalTokenIssueValue(explicitValue: string | undefined, envVa
   return undefined;
 }
 
+function resolveOptionalTokenIssueResolved(
+  explicitValue: string | undefined,
+  envVarName: string,
+): ResolvedTokenIssueValue|undefined {
+  const normalizedExplicit = explicitValue?.trim();
+  if (normalizedExplicit) {
+    return {value: normalizedExplicit, fromEnv: false};
+  }
+  const normalizedEnv = process.env[envVarName]?.trim();
+  if (normalizedEnv) {
+    return {value: normalizedEnv, fromEnv: true};
+  }
+  return undefined;
+}
+
+function resolveTokenDeviceSecretSource(commandOptions: TokenIssueCommandOptions): {
+  deviceSecretKey?: ResolvedTokenIssueValue;
+  deviceSecretMap?: ResolvedTokenIssueValue;
+} {
+  const deviceSecretKey = resolveOptionalTokenIssueResolved(commandOptions.deviceSecretKey, kTokenIssueDeviceSecretKeyEnvVar);
+  const deviceSecretMap = resolveOptionalTokenIssueResolved(commandOptions.deviceSecretMap, kTokenIssueDeviceSecretMapEnvVar);
+  if (!deviceSecretKey && !deviceSecretMap) {
+    const error = new Error(
+      'missing required device_secret_key or device_secret_map: set environment variable ' +
+      kTokenIssueDeviceSecretKeyEnvVar + ' / ' + kTokenIssueDeviceSecretMapEnvVar +
+      ' or pass --device-secret-key / --device-secret-map explicitly',
+    ) as Error & {reasonCode?: string; data?: unknown};
+    error.reasonCode = 'missing_required_input';
+    error.data = {
+      reasonCode: 'missing_required_input',
+      field: kTokenIssueDeviceSecretKeyEnvVar + ' or ' + kTokenIssueDeviceSecretMapEnvVar,
+    };
+    throw error;
+  }
+  return {deviceSecretKey, deviceSecretMap};
+}
+
 async function runTokenIssueFromCli(
   remoteId: string,
   commandOptions: TokenIssueCommandOptions,
@@ -289,12 +333,7 @@ async function runTokenIssueFromCli(
       kTokenIssueSecretKeyIdEnvVar,
       '--secret-key-id',
     );
-    const deviceSecretKey = resolveRequiredTokenIssueValue(
-      commandOptions.deviceSecretKey,
-      'device_secret_key',
-      kTokenIssueDeviceSecretKeyEnvVar,
-      '--device-secret-key',
-    );
+    const {deviceSecretKey, deviceSecretMap} = resolveTokenDeviceSecretSource(commandOptions);
     const appId = resolveRequiredTokenIssueValue(
       commandOptions.appId,
       'app_id',
@@ -305,10 +344,12 @@ async function runTokenIssueFromCli(
     return await runTokenIssue({
       accessKeyId: accessKeyId.value,
       secretKeyId: secretKeyId.value,
-      deviceSecretKey: deviceSecretKey.value,
+      deviceSecretKey: deviceSecretKey?.value,
+      deviceSecretMap: deviceSecretMap?.value,
       accessKeyIdFromEnv: accessKeyId.fromEnv,
       secretKeyIdFromEnv: secretKeyId.fromEnv,
-      deviceSecretKeyFromEnv: deviceSecretKey.fromEnv,
+      deviceSecretKeyFromEnv: deviceSecretKey?.fromEnv,
+      deviceSecretMapFromEnv: deviceSecretMap?.fromEnv,
       appId: appId.value,
       remoteId,
       openapiEndpoint: commandOptions.openapiEndpoint,
@@ -477,6 +518,7 @@ async function runTokenServeFromCli(commandOptions: TokenServeCommandOptions): P
     accessKeyId: commandOptions.accessKeyId,
     secretKeyId: commandOptions.secretKeyId,
     deviceSecretKey: commandOptions.deviceSecretKey,
+    deviceSecretMap: commandOptions.deviceSecretMap,
   });
   return await new Promise<number>((resolve) => {
     let qrPrinted = false;
@@ -512,6 +554,7 @@ export function registerTokenCommands(
       .option('--access-key-id <accessKeyId>', '显式 access_key_id；不传时读取 ' + kTokenIssueAccessKeyIdEnvVar)
       .option('--secret-key-id <secretKeyId>', '显式 secret_key_id；不传时读取 ' + kTokenIssueSecretKeyIdEnvVar)
       .option('--device-secret-key <deviceSecretKey>', '显式 device_secret_key；不传时读取 ' + kTokenIssueDeviceSecretKeyEnvVar)
+      .option('--device-secret-map <path>', 'JSON 文件，按 device_id 映射 device_secret_key；不传时读取 ' + kTokenIssueDeviceSecretMapEnvVar)
       .option('--app-id <appId>', '必填 app_id；不传时读取 ' + kTokenIssueAppIdEnvVar)
       .option('--openapi-endpoint <url>', '兼容旧调用；本地签发不使用该值')
       .option('--endpoint <entry>', '可选 endpoint；传了就写入 payload 与二维码')
@@ -533,6 +576,7 @@ export function registerTokenCommands(
       .option('--access-key-id <accessKeyId>', '显式 access_key_id；不传时读取 ' + kTokenIssueAccessKeyIdEnvVar)
       .option('--secret-key-id <secretKeyId>', '显式 secret_key_id；不传时读取 ' + kTokenIssueSecretKeyIdEnvVar)
       .option('--device-secret-key <deviceSecretKey>', '显式 device_secret_key；不传时读取 ' + kTokenIssueDeviceSecretKeyEnvVar)
+      .option('--device-secret-map <path>', 'JSON 文件，按 device_id 映射 device_secret_key；不传时读取 ' + kTokenIssueDeviceSecretMapEnvVar)
       .option('--app-id <appId>', '可选；用于输出 Flutter example 可扫码二维码，不传时读取 ' + kTokenIssueAppIdEnvVar)
       .option('--remote-id <remoteId>', '可选；用于输出 Flutter example 可扫码二维码，不传时读取 ' + kTokenIssueRemoteIdEnvVar)
       .option('--endpoint <entry>', '可选；传了就写入 Flutter example 扫码 payload')

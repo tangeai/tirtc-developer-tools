@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -85,5 +87,71 @@ func TestHTTPIssuesToken(t *testing.T) {
 	}
 	if _, ok := body["claims"]; ok {
 		t.Fatalf("legacy claims field must not be present: %+v", body)
+	}
+}
+
+func TestHTTPUsesDeviceSecretMap(t *testing.T) {
+	config := secretConfig{
+		accessKeyID: "ak",
+		secretKeyID: "sid",
+		deviceSecretMap: map[string]string{
+			"device-001": "device-001-secret",
+			"device-002": "device-002-secret",
+		},
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/tokens", strings.NewReader(`{"remote_id":"device://device-002"}`))
+	response := httptest.NewRecorder()
+	handleTokenRequest(response, request, config, "", 300)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	payload := body["payload"].(map[string]interface{})
+	if payload["scope"] != "connect:device://device-002" {
+		t.Fatalf("unexpected payload: %+v", payload)
+	}
+}
+
+func TestHTTPRejectsMissingDeviceSecretMapEntry(t *testing.T) {
+	config := secretConfig{
+		accessKeyID: "ak",
+		secretKeyID: "sid",
+		deviceSecretMap: map[string]string{
+			"device-001": "device-001-secret",
+		},
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/tokens", strings.NewReader(`{"remote_id":"device-404"}`))
+	response := httptest.NewRecorder()
+	handleTokenRequest(response, request, config, "", 300)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"field":"remote_id"`) {
+		t.Fatalf("unexpected body: %s", response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "device-001-secret") {
+		t.Fatalf("secret leaked in error body: %s", response.Body.String())
+	}
+}
+
+func TestLoadDeviceSecretMapNormalizesKeys(t *testing.T) {
+	tempDir := t.TempDir()
+	mapPath := filepath.Join(tempDir, "device-secrets.json")
+	if err := os.WriteFile(mapPath, []byte(`{"device://device-001":"secret-001","device-002":"secret-002"}`), 0o600); err != nil {
+		t.Fatalf("write map: %v", err)
+	}
+	config, err := resolveSecretConfig("ak", "sid", "", mapPath)
+	if err != nil {
+		t.Fatalf("resolveSecretConfig returned error: %v", err)
+	}
+	secret, err := config.deviceSecretForRemoteID("device-001")
+	if err != nil {
+		t.Fatalf("deviceSecretForRemoteID returned error: %v", err)
+	}
+	if secret != "secret-001" {
+		t.Fatalf("unexpected secret: %s", secret)
 	}
 }

@@ -38,7 +38,7 @@ npm run package
 | 命令 | 用途 |
 | --- | --- |
 | `token issue` | 生成连接 Token 和二维码 payload。 |
-| `token serve` | 启动本地 Token issuer HTTP 服务。 |
+| `token serve` | 启动开发用 Token issuer HTTP 服务。 |
 | `license qrcode` | 生成 license 二维码。 |
 | `assets prepare` | 准备 device 使用的媒体资产。 |
 | `device start` | 启动上行 device，发送音视频。 |
@@ -61,6 +61,23 @@ tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966 \
 
 传入 `app-id` 和 `remote-id` 后，命令会在服务启动成功时输出 Flutter example 可扫码二维码。手机扫码时建议用 `--issuer-url` 填写电脑的局域网地址。
 
+多设备联调时，改用 JSON 映射文件：
+
+```json
+{
+  "device-001": "DEVICE_001_SECRET_KEY",
+  "device-002": "DEVICE_002_SECRET_KEY"
+}
+```
+
+```sh
+tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966 \
+  --device-secret-map ./device-secrets.json \
+  --app-id "$TIRTC_APP_ID" \
+  --remote-id "device-001" \
+  --issuer-url "http://<your-lan-ip>:8966/v1/tokens"
+```
+
 ```sh
 curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
   -H 'Content-Type: application/json' \
@@ -82,6 +99,8 @@ tirtc-devtools-cli --json token issue device-001 \
 ```
 
 `--openapi-endpoint` 只为兼容旧脚本保留，不会触发远端 OpenAPI。
+
+`token issue` 同样支持 `--device-secret-map ./device-secrets.json`，会按 `<remote_id>` 查对应的 `device_secret_key`。
 
 ## 媒体资产
 

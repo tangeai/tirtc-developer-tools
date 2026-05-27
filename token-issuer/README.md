@@ -12,6 +12,32 @@ export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
 export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 ```
 
+只有一台设备或所有调试设备临时共用同一个 `device_secret_key` 时，可以只配置 `TIRTC_DEVICE_SECRET_KEY`。
+
+多台设备各自使用不同 `device_secret_key` 时，准备一个 JSON 映射文件：
+
+```json
+{
+  "device-001": "DEVICE_001_SECRET_KEY",
+  "device-002": "DEVICE_002_SECRET_KEY"
+}
+```
+
+然后传入文件路径：
+
+```sh
+export TIRTC_DEVICE_SECRET_MAP="./device-secrets.json"
+```
+
+也可以在命令里显式传入：
+
+```sh
+token-issuer/script/serve.sh --host 0.0.0.0 --port 8966 \
+  --device-secret-map ./device-secrets.json
+```
+
+`remote_id` 可以是 `device-001` 或 `device://device-001`，issuer 会先归一化为 `device_id`，再从映射文件里查对应的 `device_secret_key`。配置了映射文件后，如果请求的设备不在映射表里，请求会失败。
+
 这些是服务端密钥。不要下发到 App、网页或终端用户，不要放进 HTTP 请求体，也不要写进日志。
 
 ## 启动 HTTP 服务

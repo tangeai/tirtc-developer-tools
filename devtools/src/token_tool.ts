@@ -8,10 +8,12 @@ import {issueToken as issueCliToken} from './token_issue';
 export type TokenIssueInput = {
   accessKeyId: string;
   secretKeyId: string;
-  deviceSecretKey: string;
+  deviceSecretKey?: string;
+  deviceSecretMap?: string;
   accessKeyIdFromEnv?: boolean;
   secretKeyIdFromEnv?: boolean;
   deviceSecretKeyFromEnv?: boolean;
+  deviceSecretMapFromEnv?: boolean;
   appId: string;
   remoteId: string;
   endpoint?: string;
@@ -280,9 +282,11 @@ export async function issueToken(input: TokenIssueInput): Promise<string> {
       accessKeyId: input.accessKeyId,
       secretKeyId: input.secretKeyId,
       deviceSecretKey: input.deviceSecretKey,
+      deviceSecretMap: input.deviceSecretMap,
       accessKeyIdFromEnv: input.accessKeyIdFromEnv,
       secretKeyIdFromEnv: input.secretKeyIdFromEnv,
       deviceSecretKeyFromEnv: input.deviceSecretKeyFromEnv,
+      deviceSecretMapFromEnv: input.deviceSecretMapFromEnv,
       remoteId: input.remoteId,
       subject: input.subject,
       ttlSeconds: input.ttlSeconds,

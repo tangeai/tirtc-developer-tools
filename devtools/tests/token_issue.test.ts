@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import {issueToken} from '../src/token_issue';
+import {buildIssuerServeCommand, issueToken} from '../src/token_issue';
 
 function writeFakeIssuer(filePath: string, body: string): void {
   fs.mkdirSync(path.dirname(filePath), {recursive: true});
@@ -94,6 +94,41 @@ JSON
     expect(args).not.toContain('env-ak');
     expect(args).not.toContain('env-sid');
     expect(args).not.toContain('env-device-secret');
+  });
+
+  it('forwards device secret map when explicitly provided', async () => {
+    const argsPath = path.join(tempRoot, 'args.txt');
+    writeFakeIssuer(
+      issuerPath,
+      `printf '%s\\n' "$@" > '${argsPath}'
+cat <<'JSON'
+{"code":0,"message":"OK","data":{"token":"v1.payload.signature"}}
+JSON
+`,
+    );
+
+    await expect(issueToken({
+      accessKeyId: 'ak',
+      secretKeyId: 'sid',
+      deviceSecretMap: '/tmp/device-secrets.json',
+      remoteId: 'device-001',
+    })).resolves.toBe('v1.payload.signature');
+
+    const args = fs.readFileSync(argsPath, 'utf8');
+    expect(args).toContain('--device-secret-map');
+    expect(args).toContain('/tmp/device-secrets.json');
+    expect(args).not.toContain('--device-secret-key');
+  });
+
+  it('passes device secret map to issuer serve command', () => {
+    writeFakeIssuer(issuerPath, 'exit 0\n');
+    const command = buildIssuerServeCommand({
+      host: '127.0.0.1',
+      deviceSecretMap: '/tmp/device-secrets.json',
+    });
+
+    expect(command.args).toContain('--device-secret-map');
+    expect(command.args).toContain('/tmp/device-secrets.json');
   });
 
   it('surfaces issuer structured failures without OpenAPI fallback', async () => {

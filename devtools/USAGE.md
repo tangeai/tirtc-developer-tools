@@ -40,6 +40,23 @@ tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966 \
 
 传入 `app-id` 和 `remote-id` 后，命令会在服务启动成功时输出 Flutter example 可扫码二维码。手机扫码时建议用 `--issuer-url` 填写电脑的局域网地址。
 
+多设备时，用 JSON 文件按 `device_id` 映射 `device_secret_key`：
+
+```json
+{
+  "device-001": "DEVICE_001_SECRET_KEY",
+  "device-002": "DEVICE_002_SECRET_KEY"
+}
+```
+
+```sh
+tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966 \
+  --device-secret-map ./device-secrets.json \
+  --app-id "$TIRTC_APP_ID" \
+  --remote-id "device-001" \
+  --issuer-url "http://<your-lan-ip>:8966/v1/tokens"
+```
+
 ```sh
 curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
   -H 'Content-Type: application/json' \
@@ -55,6 +72,14 @@ export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 export TIRTC_APP_ID="<APP_ID>"
 
 tirtc-devtools-cli --json token issue <REMOTE_ID> \
+  --endpoint "<TIRTC_ENDPOINT>"
+```
+
+如果 `<REMOTE_ID>` 对应的设备密钥来自映射文件：
+
+```sh
+tirtc-devtools-cli --json token issue <REMOTE_ID> \
+  --device-secret-map ./device-secrets.json \
   --endpoint "<TIRTC_ENDPOINT>"
 ```
 

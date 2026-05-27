@@ -41,6 +41,7 @@ type secretConfig struct {
 	accessKeyID     string
 	secretKeyID     string
 	deviceSecretKey string
+	deviceSecretMap map[string]string
 }
 
 type tokenResponse struct {
@@ -77,19 +78,27 @@ func runIssue(args []string, stdout io.Writer, stderr io.Writer) int {
 	accessKeyID := fs.String("access-key-id", "", "access key id")
 	secretKeyID := fs.String("secret-key-id", "", "secret key id")
 	deviceSecretKey := fs.String("device-secret-key", "", "device secret key")
+	deviceSecretMapPath := fs.String("device-secret-map", "", "JSON file mapping device_id to device_secret_key")
 	jsonOutput := fs.Bool("json", false, "print JSON envelope")
 	tokenOnly := fs.Bool("token-only", false, "print token only")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	config := resolveSecretConfig(*accessKeyID, *secretKeyID, *deviceSecretKey)
+	config, err := resolveSecretConfig(*accessKeyID, *secretKeyID, *deviceSecretKey, *deviceSecretMapPath)
+	if err != nil {
+		return writeError(stdout, stderr, *jsonOutput, err)
+	}
+	resolvedDeviceSecretKey, err := config.deviceSecretForRemoteID(strings.TrimSpace(*remoteID))
+	if err != nil {
+		return writeError(stdout, stderr, *jsonOutput, err)
+	}
 	result, err := Sign(SigningInput{
 		RemoteID:        strings.TrimSpace(*remoteID),
 		Subject:         strings.TrimSpace(*subject),
 		TTLSeconds:      *ttlSeconds,
 		AccessKeyID:     config.accessKeyID,
 		SecretKeyID:     config.secretKeyID,
-		DeviceSecretKey: config.deviceSecretKey,
+		DeviceSecretKey: resolvedDeviceSecretKey,
 	})
 	if err != nil {
 		return writeError(stdout, stderr, *jsonOutput, err)
@@ -131,17 +140,25 @@ func runServe(args []string, stdout io.Writer, stderr io.Writer) int {
 	accessKeyID := fs.String("access-key-id", "", "access key id")
 	secretKeyID := fs.String("secret-key-id", "", "secret key id")
 	deviceSecretKey := fs.String("device-secret-key", "", "device secret key")
+	deviceSecretMapPath := fs.String("device-secret-map", "", "JSON file mapping device_id to device_secret_key")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	config := resolveSecretConfig(*accessKeyID, *secretKeyID, *deviceSecretKey)
+	config, err := resolveSecretConfig(*accessKeyID, *secretKeyID, *deviceSecretKey, *deviceSecretMapPath)
+	if err != nil {
+		return writeError(stdout, stderr, false, err)
+	}
+	preflightDeviceSecretKey := config.deviceSecretKey
+	if len(config.deviceSecretMap) > 0 {
+		preflightDeviceSecretKey = "device-secret-map-preflight"
+	}
 	if err := ValidateInput(SigningInput{
 		RemoteID:        "preflight",
 		Subject:         strings.TrimSpace(*subject),
 		TTLSeconds:      *ttlSeconds,
 		AccessKeyID:     config.accessKeyID,
 		SecretKeyID:     config.secretKeyID,
-		DeviceSecretKey: config.deviceSecretKey,
+		DeviceSecretKey: preflightDeviceSecretKey,
 	}); err != nil {
 		return writeError(stdout, stderr, false, err)
 	}
@@ -198,13 +215,18 @@ func handleTokenRequest(response http.ResponseWriter, request *http.Request, con
 	if strings.TrimSpace(parsed.Subject) != "" {
 		subject = strings.TrimSpace(parsed.Subject)
 	}
+	resolvedDeviceSecretKey, err := config.deviceSecretForRemoteID(strings.TrimSpace(parsed.RemoteID))
+	if err != nil {
+		writeHTTPError(response, http.StatusBadRequest, err)
+		return
+	}
 	result, err := Sign(SigningInput{
 		RemoteID:        strings.TrimSpace(parsed.RemoteID),
 		Subject:         subject,
 		TTLSeconds:      ttl,
 		AccessKeyID:     config.accessKeyID,
 		SecretKeyID:     config.secretKeyID,
-		DeviceSecretKey: config.deviceSecretKey,
+		DeviceSecretKey: resolvedDeviceSecretKey,
 	})
 	if err != nil {
 		writeHTTPError(response, http.StatusBadRequest, err)
@@ -216,12 +238,67 @@ func handleTokenRequest(response http.ResponseWriter, request *http.Request, con
 	})
 }
 
-func resolveSecretConfig(accessKeyID string, secretKeyID string, deviceSecretKey string) secretConfig {
+func resolveSecretConfig(accessKeyID string, secretKeyID string, deviceSecretKey string, deviceSecretMapPath string) (secretConfig, error) {
+	resolvedMapPath := choose(deviceSecretMapPath, os.Getenv("TIRTC_DEVICE_SECRET_MAP"))
+	deviceSecretMap, err := loadDeviceSecretMap(resolvedMapPath)
+	if err != nil {
+		return secretConfig{}, err
+	}
 	return secretConfig{
 		accessKeyID:     choose(accessKeyID, os.Getenv("TIRTC_ACCESS_KEY_ID")),
 		secretKeyID:     choose(secretKeyID, os.Getenv("TIRTC_SECRET_KEY_ID")),
 		deviceSecretKey: choose(deviceSecretKey, os.Getenv("TIRTC_DEVICE_SECRET_KEY")),
+		deviceSecretMap: deviceSecretMap,
+	}, nil
+}
+
+func loadDeviceSecretMap(filePath string) (map[string]string, error) {
+	normalizedPath := strings.TrimSpace(filePath)
+	if normalizedPath == "" {
+		return nil, nil
 	}
+	content, err := os.ReadFile(normalizedPath)
+	if err != nil {
+		return nil, Invalid("device_secret_map", "failed to read device secret map")
+	}
+	var raw map[string]string
+	if err := json.Unmarshal(content, &raw); err != nil {
+		return nil, Invalid("device_secret_map", "device secret map must be a JSON object")
+	}
+	if len(raw) == 0 {
+		return nil, Invalid("device_secret_map", "device secret map must not be empty")
+	}
+	normalized := make(map[string]string, len(raw))
+	for remoteID, secret := range raw {
+		deviceID, err := DeviceIDFromRemoteID(remoteID)
+		if err != nil {
+			return nil, Invalid("device_secret_map", "device secret map contains invalid device id")
+		}
+		trimmedSecret := strings.TrimSpace(secret)
+		if trimmedSecret == "" {
+			return nil, Invalid("device_secret_map", "device secret map contains empty device secret key")
+		}
+		if _, exists := normalized[deviceID]; exists {
+			return nil, Invalid("device_secret_map", "device secret map contains duplicate normalized device id")
+		}
+		normalized[deviceID] = trimmedSecret
+	}
+	return normalized, nil
+}
+
+func (config secretConfig) deviceSecretForRemoteID(remoteID string) (string, error) {
+	if len(config.deviceSecretMap) > 0 {
+		deviceID, err := DeviceIDFromRemoteID(remoteID)
+		if err != nil {
+			return "", err
+		}
+		secret, ok := config.deviceSecretMap[deviceID]
+		if !ok {
+			return "", Invalid("remote_id", "device secret key not found for remote_id")
+		}
+		return secret, nil
+	}
+	return config.deviceSecretKey, nil
 }
 
 func choose(explicit string, env string) string {

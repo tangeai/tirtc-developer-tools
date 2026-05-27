@@ -39,6 +39,7 @@ describe('tirtc-devtools-cli smoke test', () => {
     expect(output).toContain('--access-key-id <accessKeyId>');
     expect(output).toContain('--secret-key-id <secretKeyId>');
     expect(output).toContain('--device-secret-key <deviceSecretKey>');
+    expect(output).toContain('--device-secret-map <path>');
     expect(output).toContain('--app-id <appId>');
     expect(output).toContain('--ttl-seconds <seconds>');
     expect(output).not.toContain('--access-id <accessId>');
@@ -55,6 +56,7 @@ describe('tirtc-devtools-cli smoke test', () => {
     expect(output).toContain('--app-id <appId>');
     expect(output).toContain('--remote-id <remoteId>');
     expect(output).toContain('--issuer-url <url>');
+    expect(output).toContain('--device-secret-map <path>');
     expect(output).toContain('does not implement login');
   });
 

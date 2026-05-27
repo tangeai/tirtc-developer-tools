@@ -8,10 +8,12 @@ const execFile = promisify(execFileCallback);
 export type IssueTokenInput = {
   accessKeyId: string;
   secretKeyId: string;
-  deviceSecretKey: string;
+  deviceSecretKey?: string;
+  deviceSecretMap?: string;
   accessKeyIdFromEnv?: boolean;
   secretKeyIdFromEnv?: boolean;
   deviceSecretKeyFromEnv?: boolean;
+  deviceSecretMapFromEnv?: boolean;
   remoteId: string;
   subject?: string;
   ttlSeconds?: number;
@@ -72,8 +74,11 @@ export async function issueToken(input: IssueTokenInput): Promise<string> {
   if (!input.secretKeyIdFromEnv) {
     args.push('--secret-key-id', input.secretKeyId);
   }
-  if (!input.deviceSecretKeyFromEnv) {
+  if (input.deviceSecretKey && !input.deviceSecretKeyFromEnv) {
     args.push('--device-secret-key', input.deviceSecretKey);
+  }
+  if (input.deviceSecretMap && !input.deviceSecretMapFromEnv) {
+    args.push('--device-secret-map', input.deviceSecretMap);
   }
   if (input.subject) {
     args.push('--subject', input.subject);
@@ -110,6 +115,7 @@ export function buildIssuerServeCommand(params: {
   accessKeyId?: string;
   secretKeyId?: string;
   deviceSecretKey?: string;
+  deviceSecretMap?: string;
 }): {file: string; args: string[]} {
   const args = ['serve'];
   const push = (flag: string, value?: string) => {
@@ -125,5 +131,6 @@ export function buildIssuerServeCommand(params: {
   push('--access-key-id', params.accessKeyId);
   push('--secret-key-id', params.secretKeyId);
   push('--device-secret-key', params.deviceSecretKey);
+  push('--device-secret-map', params.deviceSecretMap);
   return {file: resolveIssuerCliPath(), args};
 }

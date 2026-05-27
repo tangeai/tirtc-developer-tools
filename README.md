@@ -17,6 +17,20 @@ export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 token-issuer/script/serve.sh --host 0.0.0.0 --port 8966
 ```
 
+多设备联调时，用 JSON 文件按 `device_id` 映射 `device_secret_key`：
+
+```json
+{
+  "device-001": "DEVICE_001_SECRET_KEY",
+  "device-002": "DEVICE_002_SECRET_KEY"
+}
+```
+
+```sh
+export TIRTC_DEVICE_SECRET_MAP="./device-secrets.json"
+token-issuer/script/serve.sh --host 0.0.0.0 --port 8966
+```
+
 ```sh
 curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
   -H 'Content-Type: application/json' \
@@ -54,6 +68,6 @@ node devtools/bin/tirtc-devtools-cli.js --help
 
 ## 安全边界
 
-`TIRTC_ACCESS_KEY_ID`、`TIRTC_SECRET_KEY_ID`、`TIRTC_DEVICE_SECRET_KEY` 是服务端密钥，不能下发到客户端，也不要写进日志。
+`TIRTC_ACCESS_KEY_ID`、`TIRTC_SECRET_KEY_ID`、`TIRTC_DEVICE_SECRET_KEY` 和 `TIRTC_DEVICE_SECRET_MAP` 指向的文件是服务端密钥材料，不能下发到客户端，也不要写进日志。
 
 本仓库不提供登录、租户、用户设备归属、API key 网关或公网部署安全方案。HTTP issuer 只能放在你的业务服务或网关后面，由业务系统先完成授权判断。
