@@ -94,16 +94,6 @@ npm run test:package
 node bin/tirtc-devtools-cli.js --help
 ```
 
-## 发布物
-
-已发布的 npm 包会携带目标平台需要的 issuer、native driver 和 runtime bundle；源码仓库只保留可复现这些发布物的源码、脚本和说明。
-
-runtime SDK release asset 由 Matrix 主仓的 `release-devtools-cli` 流程生成并上传到本仓库 Releases，文件名形如：
-
-```text
-devtools-runtime-sdk-YYYYMMDDHHMMSS.zip
-```
-
 ## 安全边界
 
 `TIRTC_ACCESS_KEY_ID`、`TIRTC_SECRET_KEY_ID`、`TIRTC_DEVICE_SECRET_KEY` 以及设备密钥映射文件都属于服务端密钥材料。它们只应存在于服务端、网关或受控开发环境中，不应下发到客户端，也不应写入日志。

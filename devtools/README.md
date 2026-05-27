@@ -73,7 +73,7 @@ TIRTC_DEVTOOLS_RUNTIME_SDK_DIR=/path/to/runtime-sdk-root \
 npm test
 ```
 
-发布前 package 验证：
+package 验证：
 
 ```sh
 npm run test:package
