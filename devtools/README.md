@@ -1,38 +1,58 @@
-# TiRTC DevTools CLI
+# DevTools CLI 源码工程
 
-`tirtc-devtools-cli` 是 TiRTC 日常开发调试 CLI。
+`devtools/` 是 `tirtc-devtools-cli` 的源码目录。这里说明 CLI 如何从源码构建、验证和打包；具体命令使用方式请看开发者文档和 [USAGE.md](USAGE.md)。
 
-它可以做这些事：
+## 目录
 
-- 启动开发调试用 Token 签发 HTTP 服务。
-- 把 MP4 准备成 device 可发送的媒体资产。
-- 启动标准 device，向 TiRTC 发送音视频。
-- 启动标准 client，接收音视频并产出调试证据。
+| 目录 | 作用 |
+| --- | --- |
+| `src/` | TypeScript CLI 实现。 |
+| `bin/` | npm bin 入口。 |
+| `script/` | 本子工程的准备、构建、打包和验证脚本。 |
+| `tests/` | CLI 单元测试、package 验证测试和 e2e 配置示例。 |
+| `driver/` | CLI 打包使用的 native device/client driver 源码。 |
+| `3rd/runtime/` | 预构建 runtime SDK 输入目录，由 `script/prepare_runtime.sh` 生成。 |
+| `vendor/` | npm package staging 目录，由 `script/package.sh` 生成。 |
 
-## 安装
+`3rd/runtime/` 和 `vendor/` 是本地生成目录，不提交到源码仓库。
 
-```sh
-npm install -g tirtc-devtools-cli
-tirtc-devtools-cli --help
-```
+## 前置条件
 
-源码运行：
+- Node.js 20+ 和 npm。
+- macOS arm64 或 Linux x64。
+- 完整打包前需要准备 runtime SDK。
+- 从 GitHub Releases 自动下载 runtime SDK 时，需要 `GITHUB_PERSONAL_TOKEN_CLASSIC`。
+
+## 安装依赖
 
 ```sh
 npm ci
+```
+
+## 构建
+
+只构建 TypeScript：
+
+```sh
 npm run build
+```
+
+从源码启动 CLI：
+
+```sh
 node bin/tirtc-devtools-cli.js --help
 ```
 
-源码打包完整 CLI 前，需要先准备预构建 runtime SDK：
+## 准备 runtime SDK
+
+完整 package 需要 `3rd/runtime/<platform>/include` 和 `3rd/runtime/<platform>/lib`。
+
+自动下载最新 release asset：
 
 ```sh
 export GITHUB_PERSONAL_TOKEN_CLASSIC="<github_personal_token_classic>"
 ./script/prepare_runtime.sh
-npm run package
 ```
-
-`prepare_runtime.sh` 默认使用 `GITHUB_PERSONAL_TOKEN_CLASSIC` 从 [tangeai/tirtc-developer-tools Releases](https://github.com/tangeai/tirtc-developer-tools/releases) 下载最新 `devtools-runtime-sdk-*.zip`，并把 runtime SDK 放到 `3rd/runtime/<platform>/`。在 Matrix 主仓内运行时，也可以从本地 `.build/sdk` 生成同样的预构建输入。
 
 手动指定 runtime SDK zip：
 
@@ -48,106 +68,56 @@ TIRTC_DEVTOOLS_RUNTIME_SDK_DIR=/path/to/runtime-sdk-root \
   ./script/prepare_runtime.sh
 ```
 
-## 常用命令
-
-| 命令 | 用途 |
-| --- | --- |
-| `token serve` | 启动开发调试用 Token 签发 HTTP 服务。 |
-| `license qrcode` | 生成 license 二维码。 |
-| `assets prepare` | 准备 device 使用的媒体资产。 |
-| `device start` | 启动上行 device，发送音视频。 |
-| `client start` | 启动下行 client，接收音视频。 |
-
-`--json` 会把结果写成机器可读 JSON；运行日志仍写到 stderr。
-
-## Token 签发 HTTP 服务
+## 测试
 
 ```sh
-export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
-export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
-export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
-
-tirtc-devtools-cli token serve --port 8966
+npm test
 ```
 
-启动后客户端请求：
+发布前 package 验证：
 
 ```sh
-curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
-  -H 'Content-Type: application/json' \
-  --data '{"remote_id":"device-001"}'
+npm run test:package
 ```
 
-响应：
+需要真实 TiRTC 链路时，先按 `tests/runtime-backed.e2e.config.example.json` 准备本地配置，再运行对应 e2e 脚本。
 
-```json
-{
-  "token": "v1..."
-}
-```
-
-这个服务只做 Token 签名，不判断请求用户是谁，也不判断用户是否有权访问对应设备。生产环境应先在业务服务里完成登录态、租户、用户设备归属和访问权限校验，再签发短时 Token。
-
-多设备联调时，改用 JSON 映射文件：
-
-```json
-{
-  "device-001": "DEVICE_001_SECRET_KEY",
-  "device-002": "DEVICE_002_SECRET_KEY"
-}
-```
+## 打包
 
 ```sh
-tirtc-devtools-cli token serve --port 8966 \
-  --device-secret-map ./device-secrets.json
+export GITHUB_PERSONAL_TOKEN_CLASSIC="<github_personal_token_classic>"
+npm run package
 ```
 
-## 内部一次性 Token 签发
+`npm run package` 会：
 
-`token issue` 保留给内部自动化、旧 App 组合和排查脚本使用。新接入请优先使用 `token serve`，由客户端在连接前向业务服务请求短时 Token。
+1. 构建 TypeScript。
+2. 准备 runtime SDK。
+3. 构建当前平台对应的 native driver。
+4. 构建 token issuer 二进制。
+5. 生成 `vendor/` staging 内容。
 
-## 媒体资产
+生成 npm tarball：
 
 ```sh
-tirtc-devtools-cli --json assets prepare \
-  --source ./movie.mp4 \
-  --output-root .build/tirtc-assets
+npm pack
 ```
-
-把返回的 `manifest_path` 传给 `device start --source`。
-
-## Device
-
-```sh
-export TIRTC_DEVICE_ID="<DEVICE_ID>"
-export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
-export TIRTC_ENDPOINT="<TIRTC_ENDPOINT>"
-
-tirtc-devtools-cli --json device start \
-  --source .build/tirtc-assets/manifest.json \
-  --video-codec h264 \
-  --artifact-root .build/devtools-cli/device-h264
-```
-
-`device start` 默认一直运行。需要自动结束时传 `--duration-ms <ms>`。
-
-## Client
-
-```sh
-tirtc-devtools-cli --json client start \
-  --bootstrap .build/devtools-cli/device-h264/bootstrap.json \
-  --artifact-root .build/devtools-cli/client-h264
-```
-
-client 会写出 `summary.json`、`events.jsonl`、runtime logs 和首帧渲染产物。`bootstrap.json` 只是 DevTools 本机联调文件，不是移动端 SDK 接入协议。
 
 ## 平台
+
+当前 package 支持：
 
 - `macos-arm64`
 - `linux-x64`
 
-已发布 npm 包会携带对应平台的 issuer、native driver 和 runtime bundle。源码 checkout 默认不提交这些大型运行资产；`driver/` 源码在本仓内，构建时只需要 `3rd/runtime/<platform>` 中的预构建 runtime SDK。
+可以通过环境变量指定构建平台：
 
-## 更多命令
+```sh
+TIRTC_RUNTIME_PLATFORM=linux-x64 npm run package
+```
 
-看 [USAGE.md](USAGE.md)。
+或一次构建多个平台：
+
+```sh
+TIRTC_RUNTIME_PLATFORMS="macos-arm64 linux-x64" npm run package
+```
