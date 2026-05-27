@@ -77,12 +77,21 @@ download_latest_release_asset() {
   local output_zip="$1"
   python3 - "$output_zip" <<'PY'
 import json
+import os
 import sys
 import urllib.request
 
 output_zip = sys.argv[1]
 api = 'https://api.github.com/repos/tangeai/tirtc-developer-tools/releases/latest'
-with urllib.request.urlopen(api, timeout=30) as response:
+headers = {
+    'Accept': 'application/vnd.github+json',
+    'User-Agent': 'tirtc-devtools-prepare-runtime',
+}
+token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GITHUB_PERSONAL_TOKEN_CLASSIC')
+if token:
+    headers['Authorization'] = f'Bearer {token}'
+request = urllib.request.Request(api, headers=headers)
+with urllib.request.urlopen(request, timeout=30) as response:
     release = json.load(response)
 assets = release.get('assets') or []
 asset = None
@@ -126,11 +135,12 @@ elif [[ -x "$MATRIX_REPO_ROOT/runtime/script/prepare_product_runtime.sh" ]]; the
     copy_runtime_platform "$MATRIX_REPO_ROOT/.build/products/runtime" "$platform"
   done
 else
-  tmp_zip="$(mktemp "${TMPDIR:-/tmp}/tirtc-devtools-runtime-sdk.XXXXXX.zip")"
+  tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/tirtc-devtools-runtime-sdk.XXXXXX")"
+  tmp_zip="$tmp_dir/runtime-sdk.zip"
   echo "[devtools runtime] downloading latest runtime SDK release asset..."
   download_latest_release_asset "$tmp_zip"
   prepare_from_zip "$tmp_zip" "${platforms[@]}"
-  rm -f "$tmp_zip"
+  rm -rf "$tmp_dir"
 fi
 
 echo "[devtools runtime] staged runtime SDK under $CLI_ROOT/3rd/runtime"
