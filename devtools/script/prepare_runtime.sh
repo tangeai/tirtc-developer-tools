@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CLI_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+RELEASE_REPO=${TIRTC_DEVTOOLS_RELEASE_REPO:-tangeai/tirtc-developer-tools}
 if [[ -n "${TIRTC_MATRIX_REPO_ROOT:-}" ]]; then
   MATRIX_REPO_ROOT=$(cd "$TIRTC_MATRIX_REPO_ROOT" && pwd)
 else
@@ -75,38 +76,29 @@ PY
 
 download_latest_release_asset() {
   local output_zip="$1"
-  python3 - "$output_zip" <<'PY'
-import json
-import os
-import sys
-import urllib.request
+  command -v curl >/dev/null 2>&1 || {
+    echo "[devtools runtime] missing command: curl" >&2
+    exit 3
+  }
 
-output_zip = sys.argv[1]
-api = 'https://api.github.com/repos/tangeai/tirtc-developer-tools/releases/latest'
-headers = {
-    'Accept': 'application/vnd.github+json',
-    'User-Agent': 'tirtc-devtools-prepare-runtime',
-}
-token = os.environ.get('GITHUB_PERSONAL_TOKEN_CLASSIC')
-if not token:
-    raise SystemExit('GITHUB_PERSONAL_TOKEN_CLASSIC is required to download runtime SDK release asset')
-headers['Authorization'] = f'Bearer {token}'
-request = urllib.request.Request(api, headers=headers)
-with urllib.request.urlopen(request, timeout=30) as response:
-    release = json.load(response)
-assets = release.get('assets') or []
-asset = None
-for candidate in assets:
-    name = candidate.get('name') or ''
-    if name.startswith('devtools-runtime-sdk-') and name.endswith('.zip'):
-        asset = candidate
-        break
-if asset is None:
-    raise SystemExit('latest release does not contain devtools-runtime-sdk-*.zip')
-url = asset['browser_download_url']
-with urllib.request.urlopen(url, timeout=120) as response, open(output_zip, 'wb') as out:
-    out.write(response.read())
-PY
+  local latest_url="https://github.com/$RELEASE_REPO/releases/latest"
+  local effective_url
+  effective_url=$(curl -fsSL -o /dev/null -w '%{url_effective}' "$latest_url")
+  local timestamp="${effective_url##*/}"
+  case "$timestamp" in
+    *[!0-9]*|"")
+      echo "[devtools runtime] latest release tag is not a timestamp: $timestamp" >&2
+      exit 3
+      ;;
+  esac
+  if [[ "${#timestamp}" -ne 14 ]]; then
+    echo "[devtools runtime] latest release tag must be YYYYMMDDHHMMSS: $timestamp" >&2
+    exit 3
+  fi
+
+  local asset_url="https://github.com/$RELEASE_REPO/releases/download/$timestamp/devtools-runtime-sdk-$timestamp.zip"
+  echo "[devtools runtime] downloading $asset_url"
+  curl -fL "$asset_url" -o "$output_zip"
 }
 
 platforms=()

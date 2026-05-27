@@ -21,7 +21,7 @@
 - Node.js 20+ 和 npm。
 - macOS arm64 或 Linux x64。
 - 完整打包前需要准备 runtime SDK。
-- 从 GitHub Releases 自动下载 runtime SDK 时，需要 `GITHUB_PERSONAL_TOKEN_CLASSIC`。
+- 自动下载 runtime SDK 时，需要能访问 GitHub Releases。
 
 ## 安装依赖
 
@@ -50,7 +50,6 @@ node bin/tirtc-devtools-cli.js --help
 自动下载最新 release asset：
 
 ```sh
-export GITHUB_PERSONAL_TOKEN_CLASSIC="<github_personal_token_classic>"
 ./script/prepare_runtime.sh
 ```
 
@@ -85,7 +84,6 @@ npm run test:package
 ## 打包
 
 ```sh
-export GITHUB_PERSONAL_TOKEN_CLASSIC="<github_personal_token_classic>"
 npm run package
 ```
 

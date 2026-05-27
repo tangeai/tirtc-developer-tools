@@ -24,7 +24,7 @@ https://docs.tange.ai/products/tirtc/
 - Go 1.22+。
 - macOS arm64 或 Linux x64。
 - 构建完整 CLI package 时，需要准备预构建 runtime SDK。
-- 从 GitHub Releases 自动下载 runtime SDK 时，需要 `GITHUB_PERSONAL_TOKEN_CLASSIC`。
+- 自动下载 runtime SDK 时，需要能访问 GitHub Releases。
 
 ## 准备 runtime SDK
 
@@ -32,7 +32,6 @@ https://docs.tange.ai/products/tirtc/
 
 ```sh
 cd devtools
-export GITHUB_PERSONAL_TOKEN_CLASSIC="<github_personal_token_classic>"
 ./script/prepare_runtime.sh
 ```
 
@@ -84,7 +83,6 @@ npm test
 准备 runtime SDK 后，可以构建完整 package staging：
 
 ```sh
-export GITHUB_PERSONAL_TOKEN_CLASSIC="<github_personal_token_classic>"
 ./script/prepare_runtime.sh
 npm run package
 npm run test:package
