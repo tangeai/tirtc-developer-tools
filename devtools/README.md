@@ -31,7 +31,21 @@ node bin/tirtc-devtools-cli.js --help
 npm run package
 ```
 
-`prepare_runtime.sh` 会把 runtime SDK 放到 `3rd/runtime/<platform>/`。公开仓默认从 GitHub Release 获取 SDK；在 Matrix 主仓内运行时，也可以从本地 `.build/sdk` 生成同样的预构建输入。
+`prepare_runtime.sh` 默认从 [tangeai/tirtc-developer-tools Releases](https://github.com/tangeai/tirtc-developer-tools/releases) 下载最新 `devtools-runtime-sdk-*.zip`，并把 runtime SDK 放到 `3rd/runtime/<platform>/`。在 Matrix 主仓内运行时，也可以从本地 `.build/sdk` 生成同样的预构建输入。
+
+手动指定 runtime SDK zip：
+
+```sh
+TIRTC_DEVTOOLS_RUNTIME_SDK_ZIP=/path/to/devtools-runtime-sdk-YYYYMMDDHHMMSS.zip \
+  ./script/prepare_runtime.sh
+```
+
+手动指定已经解压好的 SDK 目录：
+
+```sh
+TIRTC_DEVTOOLS_RUNTIME_SDK_DIR=/path/to/runtime-sdk-root \
+  ./script/prepare_runtime.sh
+```
 
 ## 常用命令
 

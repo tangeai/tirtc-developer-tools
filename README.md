@@ -54,6 +54,33 @@ npm --prefix devtools run build
 node devtools/bin/tirtc-devtools-cli.js --help
 ```
 
+源码 checkout 默认不提交 runtime SDK 二进制库。第一次从源码打包或构建完整 CLI 前，先准备预构建 runtime SDK：
+
+```sh
+cd devtools
+./script/prepare_runtime.sh
+```
+
+`prepare_runtime.sh` 会下载本仓库 GitHub Releases 里的 `devtools-runtime-sdk-*.zip`，并把内容解压到：
+
+```text
+devtools/3rd/runtime/
+  macos-arm64/
+    include/
+    lib/
+  linux-x64/
+    include/
+    lib/
+```
+
+也可以手动下载 release asset 后指定 zip：
+
+```sh
+cd devtools
+TIRTC_DEVTOOLS_RUNTIME_SDK_ZIP=/path/to/devtools-runtime-sdk-YYYYMMDDHHMMSS.zip \
+  ./script/prepare_runtime.sh
+```
+
 继续看：
 
 - [devtools/README.md](devtools/README.md)
@@ -65,6 +92,8 @@ node devtools/bin/tirtc-devtools-cli.js --help
 - `linux-x64`
 
 已发布的 `tirtc-devtools-cli` 包会带上对应平台的 issuer、native driver 和 runtime bundle。源码仓库默认不提交这些大型运行资产。
+
+runtime SDK release asset 由 Matrix 主仓 `$release-devtools-cli` 流程生成并上传到本仓库 Releases，文件名形如 `devtools-runtime-sdk-20260527183000.zip`。
 
 ## 安全边界
 
