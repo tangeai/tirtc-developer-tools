@@ -87,9 +87,10 @@ headers = {
     'Accept': 'application/vnd.github+json',
     'User-Agent': 'tirtc-devtools-prepare-runtime',
 }
-token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GITHUB_PERSONAL_TOKEN_CLASSIC')
-if token:
-    headers['Authorization'] = f'Bearer {token}'
+token = os.environ.get('GITHUB_PERSONAL_TOKEN_CLASSIC')
+if not token:
+    raise SystemExit('GITHUB_PERSONAL_TOKEN_CLASSIC is required to download runtime SDK release asset')
+headers['Authorization'] = f'Bearer {token}'
 request = urllib.request.Request(api, headers=headers)
 with urllib.request.urlopen(request, timeout=30) as response:
     release = json.load(response)

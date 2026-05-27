@@ -58,6 +58,7 @@ node devtools/bin/tirtc-devtools-cli.js --help
 
 ```sh
 cd devtools
+export GITHUB_PERSONAL_TOKEN_CLASSIC="<github_personal_token_classic>"
 ./script/prepare_runtime.sh
 ```
 
@@ -77,6 +78,7 @@ devtools/3rd/runtime/
 
 ```sh
 cd devtools
+export GITHUB_PERSONAL_TOKEN_CLASSIC="<github_personal_token_classic>"
 TIRTC_DEVTOOLS_RUNTIME_SDK_ZIP=/path/to/devtools-runtime-sdk-YYYYMMDDHHMMSS.zip \
   ./script/prepare_runtime.sh
 ```
