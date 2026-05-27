@@ -1,10 +1,7 @@
 import {
   buildAsciiQrcode,
-  buildIssuerServiceQrcode,
-  buildIssuerServiceQrcodePayload,
   buildLicenseQrcode,
   buildLicenseQrcodePayload,
-  formatIssuerServiceQrcodeConsoleOutput,
   buildIssuedTokenPayload,
   formatLicenseQrcodeConsoleOutput,
   formatTokenIssueConsoleOutput,
@@ -74,39 +71,6 @@ describe('token tool', () => {
       license: 'TESTFENGJUNX,aaddxxx..',
     });
   });
-
-  it('builds issuer service qrcode payload for Flutter example scan', async () => {
-    const output = await buildIssuerServiceQrcode({
-      appId: 'app-id',
-      remoteId: 'remote-id',
-      tokenIssuerUrl: 'http://127.0.0.1:8966/v1/tokens',
-      endpoint: 'http://service.example',
-      asciiMaxColumns: 120,
-      qrErrorCorrectionLevel: 'M',
-    });
-    const text = formatIssuerServiceQrcodeConsoleOutput(output);
-
-    expect(buildIssuerServiceQrcodePayload({
-      appId: 'app-id',
-      remoteId: 'remote-id',
-      tokenIssuerUrl: 'http://127.0.0.1:8966/v1/tokens',
-    })).toEqual({
-      app_id: 'app-id',
-      remote_id: 'remote-id',
-      token_issuer_url: 'http://127.0.0.1:8966/v1/tokens',
-    });
-    expect(output.payload).toEqual({
-      app_id: 'app-id',
-      remote_id: 'remote-id',
-      token_issuer_url: 'http://127.0.0.1:8966/v1/tokens',
-      endpoint: 'http://service.example',
-    });
-    expect(JSON.parse(output.payloadJson)).toEqual(output.payload);
-    expect(fs.existsSync(output.qrCodePngPath)).toBe(true);
-    expect(text).toContain('Token Issuer Service QR Code Summary:');
-    expect(text).toContain('token_issuer_url: http://127.0.0.1:8966/v1/tokens');
-    expect(text).not.toContain('device-secret');
-  }, qrCodeTestTimeoutMs);
 
   it('builds license qrcode output and formats console summary', async () => {
     const output = await buildLicenseQrcode({

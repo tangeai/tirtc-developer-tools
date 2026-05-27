@@ -2,9 +2,7 @@ import {Command} from 'commander';
 import {spawn} from 'child_process';
 
 import {
-  buildIssuerServiceQrcode,
   buildLicenseQrcode,
-  formatIssuerServiceQrcodeConsoleOutput,
   formatLicenseQrcodeConsoleOutput,
   formatTokenIssueConsoleOutput,
   issueTokenWithQrcode,
@@ -65,12 +63,6 @@ type TokenServeCommandOptions = {
   secretKeyId?: string;
   deviceSecretKey?: string;
   deviceSecretMap?: string;
-  appId?: string;
-  remoteId?: string;
-  endpoint?: string;
-  issuerUrl?: string;
-  qrErrorCorrectionLevel?: string;
-  asciiMaxColumns?: string;
 };
 
 type LicenseQrcodeCliParams = {
@@ -91,10 +83,7 @@ const kTokenIssueSecretKeyIdEnvVar = 'TIRTC_SECRET_KEY_ID';
 const kTokenIssueDeviceSecretKeyEnvVar = 'TIRTC_DEVICE_SECRET_KEY';
 const kTokenIssueDeviceSecretMapEnvVar = 'TIRTC_DEVICE_SECRET_MAP';
 const kTokenIssueAppIdEnvVar = 'TIRTC_APP_ID';
-const kTokenIssueRemoteIdEnvVar = 'TIRTC_DEVICE_ID';
 const kTokenIssueSubjectEnvVar = 'TIRTC_TOKEN_SUBJECT';
-const kDefaultTokenIssuerHost = '0.0.0.0';
-const kDefaultTokenIssuerPort = '8966';
 const errorReasonCodeMapping: Record<string, number> = {
   missing_required_input: 2,
   invalid_request: 2,
@@ -410,106 +399,7 @@ async function runLicenseQrcodeFromCli(
   }
 }
 
-function parsePositiveIntOption(name: string, raw?: string): number|undefined {
-  if (raw === undefined) {
-    return undefined;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(name + ' must be a positive integer');
-  }
-  return parsed;
-}
-
-function parseQrErrorCorrectionLevelOption(raw?: string): 'L' | 'M' | 'Q' | 'H' | undefined {
-  if (raw === undefined) {
-    return undefined;
-  }
-  const normalized = raw.trim().toUpperCase();
-  if (normalized !== 'L' && normalized !== 'M' && normalized !== 'Q' && normalized !== 'H') {
-    throw new Error('qr-error-correction-level must be one of: L, M, Q, H');
-  }
-  return normalized;
-}
-
-function normalizeOptionalText(raw?: string): string|undefined {
-  const normalized = raw?.trim();
-  return normalized ? normalized : undefined;
-}
-
-function resolveTokenServeQrValue(explicitValue: string|undefined, envVarName: string): string|undefined {
-  return normalizeOptionalText(explicitValue) ?? normalizeOptionalText(process.env[envVarName]);
-}
-
-function isWildcardListenHost(host: string): boolean {
-  return host === '0.0.0.0' || host === '::' || host === '[::]' || host === '';
-}
-
-function hostForIssuerUrl(host: string): string {
-  if (isWildcardListenHost(host)) {
-    return '127.0.0.1';
-  }
-  if (host.includes(':') && !host.startsWith('[')) {
-    return '[' + host + ']';
-  }
-  return host;
-}
-
-function buildDefaultTokenIssuerUrl(host: string|undefined, port: string|undefined): string {
-  return 'http://' + hostForIssuerUrl(normalizeOptionalText(host) ?? kDefaultTokenIssuerHost) +
-    ':' + (normalizeOptionalText(port) ?? kDefaultTokenIssuerPort) + '/v1/tokens';
-}
-
-function validateHttpUrl(fieldName: string, value: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error(fieldName + ' must be a complete http(s) URL');
-  }
-  if (!parsed.hostname || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
-    throw new Error(fieldName + ' must be a complete http(s) URL');
-  }
-  return parsed.toString();
-}
-
-async function buildTokenServeQrOutput(commandOptions: TokenServeCommandOptions): Promise<string|undefined> {
-  const appId = resolveTokenServeQrValue(commandOptions.appId, kTokenIssueAppIdEnvVar);
-  const remoteId = resolveTokenServeQrValue(commandOptions.remoteId, kTokenIssueRemoteIdEnvVar);
-  const issuerUrl = normalizeOptionalText(commandOptions.issuerUrl) ??
-    buildDefaultTokenIssuerUrl(commandOptions.host, commandOptions.port);
-  const hasQrInput = appId !== undefined ||
-    remoteId !== undefined ||
-    normalizeOptionalText(commandOptions.endpoint) !== undefined ||
-    normalizeOptionalText(commandOptions.issuerUrl) !== undefined ||
-    commandOptions.qrErrorCorrectionLevel !== undefined ||
-    commandOptions.asciiMaxColumns !== undefined;
-
-  if (!hasQrInput) {
-    return undefined;
-  }
-  if (!appId || !remoteId) {
-    throw new Error('token serve QR output requires app_id and remote_id: pass --app-id/--remote-id or set TIRTC_APP_ID/TIRTC_DEVICE_ID');
-  }
-
-  const output = await buildIssuerServiceQrcode({
-    appId,
-    remoteId,
-    endpoint: commandOptions.endpoint,
-    tokenIssuerUrl: validateHttpUrl('issuer-url', issuerUrl),
-    qrErrorCorrectionLevel: parseQrErrorCorrectionLevelOption(commandOptions.qrErrorCorrectionLevel),
-    asciiMaxColumns: parsePositiveIntOption('ascii-max-columns', commandOptions.asciiMaxColumns),
-  });
-  return formatIssuerServiceQrcodeConsoleOutput(output);
-}
-
 async function runTokenServeFromCli(commandOptions: TokenServeCommandOptions): Promise<number> {
-  let qrOutput: string|undefined;
-  try {
-    qrOutput = await buildTokenServeQrOutput(commandOptions);
-  } catch (error: unknown) {
-    return printTokenCommandError(error, {});
-  }
   const {file, args} = buildIssuerServeCommand({
     host: commandOptions.host,
     port: commandOptions.port,
@@ -521,17 +411,10 @@ async function runTokenServeFromCli(commandOptions: TokenServeCommandOptions): P
     deviceSecretMap: commandOptions.deviceSecretMap,
   });
   return await new Promise<number>((resolve) => {
-    let qrPrinted = false;
-    let stderrBuffer = '';
     const child = spawn(file, args, {stdio: ['inherit', 'inherit', 'pipe']});
     child.stderr.on('data', (chunk: Buffer) => {
       const text = chunk.toString();
       process.stderr.write(text);
-      stderrBuffer = (stderrBuffer + text).slice(-4096);
-      if (!qrPrinted && qrOutput && stderrBuffer.includes('[tirtc-issuer] listening on ')) {
-        qrPrinted = true;
-        console.log(qrOutput);
-      }
     });
     child.on('error', (error) => {
       console.error('Error (issuer_failed): ' + error.message);
@@ -548,9 +431,9 @@ export function registerTokenCommands(
   getCliOptions: () => CliOptions,
   runAndExit: (promise: Promise<number>) => void,
 ): void {
-  const token = program.command('token').description('Token 工具：签发 token，并输出可直接使用的 JSON 与本地二维码 PNG');
+  const token = program.command('token').description('Token 工具：启动开发调试用 HTTP token 服务；保留内部一次性 token 签发入口');
   token.command('issue <remote_id>')
-      .description('默认从环境变量读取 secret，并基于本地 issuer 签发 token')
+      .description('内部自动化 / legacy 调试入口：签发一次性连接 token')
       .option('--access-key-id <accessKeyId>', '显式 access_key_id；不传时读取 ' + kTokenIssueAccessKeyIdEnvVar)
       .option('--secret-key-id <secretKeyId>', '显式 secret_key_id；不传时读取 ' + kTokenIssueSecretKeyIdEnvVar)
       .option('--device-secret-key <deviceSecretKey>', '显式 device_secret_key；不传时读取 ' + kTokenIssueDeviceSecretKeyEnvVar)
@@ -568,7 +451,7 @@ export function registerTokenCommands(
       });
 
   token.command('serve')
-      .description('以前台进程启动本地 HTTP token issuer；业务鉴权必须在调用 issuer 前完成')
+      .description('以前台进程启动开发调试用 HTTP token issuer；业务鉴权必须在调用 issuer 前完成')
       .option('--host <host>', 'listen host；默认 0.0.0.0')
       .option('--port <port>', 'listen port；默认 8966')
       .option('--subject <subject>', 'default token subject')
@@ -577,15 +460,11 @@ export function registerTokenCommands(
       .option('--secret-key-id <secretKeyId>', '显式 secret_key_id；不传时读取 ' + kTokenIssueSecretKeyIdEnvVar)
       .option('--device-secret-key <deviceSecretKey>', '显式 device_secret_key；不传时读取 ' + kTokenIssueDeviceSecretKeyEnvVar)
       .option('--device-secret-map <path>', 'JSON 文件，按 device_id 映射 device_secret_key；不传时读取 ' + kTokenIssueDeviceSecretMapEnvVar)
-      .option('--app-id <appId>', '可选；用于输出 Flutter example 可扫码二维码，不传时读取 ' + kTokenIssueAppIdEnvVar)
-      .option('--remote-id <remoteId>', '可选；用于输出 Flutter example 可扫码二维码，不传时读取 ' + kTokenIssueRemoteIdEnvVar)
-      .option('--endpoint <entry>', '可选；传了就写入 Flutter example 扫码 payload')
-      .option('--issuer-url <url>', '可选；覆盖二维码中的 Token 签发服务端 URL，适合手机扫描局域网地址')
-      .option('--qr-error-correction-level <level>', '二维码纠错级别：L/M/Q/H；默认 M')
-      .option('--ascii-max-columns <columns>', 'ASCII 二维码最大宽度；不传时优先读取当前终端宽度或 COLUMNS')
       .addHelpText('after', `
 This command only demonstrates TiRTC token signing. It does not implement login,
 tenant authorization, user-device ownership checks, API keys, or gateway security.
+Clients should request tokens with POST /v1/tokens and a JSON body like:
+  {"remote_id":"device://your_device_id"}
 `)
       .action((commandOptions: TokenServeCommandOptions) => {
         runAndExit(runTokenServeFromCli(commandOptions));

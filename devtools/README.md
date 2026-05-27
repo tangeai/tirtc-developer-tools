@@ -4,7 +4,7 @@
 
 它可以做这些事：
 
-- 生成连接 Token、Token 服务和 license 二维码。
+- 启动开发调试用 Token 签发 HTTP 服务。
 - 把 MP4 准备成 device 可发送的媒体资产。
 - 启动标准 device，向 TiRTC 发送音视频。
 - 启动标准 client，接收音视频并产出调试证据。
@@ -37,8 +37,7 @@ npm run package
 
 | 命令 | 用途 |
 | --- | --- |
-| `token issue` | 生成连接 Token 和二维码 payload。 |
-| `token serve` | 启动开发用 Token issuer HTTP 服务。 |
+| `token serve` | 启动开发调试用 Token 签发 HTTP 服务。 |
 | `license qrcode` | 生成 license 二维码。 |
 | `assets prepare` | 准备 device 使用的媒体资产。 |
 | `device start` | 启动上行 device，发送音视频。 |
@@ -46,20 +45,33 @@ npm run package
 
 `--json` 会把结果写成机器可读 JSON；运行日志仍写到 stderr。
 
-## Token 服务
+## Token 签发 HTTP 服务
 
 ```sh
 export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
 export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
 export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 
-tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966 \
-  --app-id "$TIRTC_APP_ID" \
-  --remote-id "device-001" \
-  --issuer-url "http://<your-lan-ip>:8966/v1/tokens"
+tirtc-devtools-cli token serve --port 8966
 ```
 
-传入 `app-id` 和 `remote-id` 后，命令会在服务启动成功时输出 Flutter example 可扫码二维码。手机扫码时建议用 `--issuer-url` 填写电脑的局域网地址。
+启动后客户端请求：
+
+```sh
+curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
+  -H 'Content-Type: application/json' \
+  --data '{"remote_id":"device-001"}'
+```
+
+响应：
+
+```json
+{
+  "token": "v1..."
+}
+```
+
+这个服务只做 Token 签名，不判断请求用户是谁，也不判断用户是否有权访问对应设备。生产环境应先在业务服务里完成登录态、租户、用户设备归属和访问权限校验，再签发短时 Token。
 
 多设备联调时，改用 JSON 映射文件：
 
@@ -71,36 +83,13 @@ tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966 \
 ```
 
 ```sh
-tirtc-devtools-cli token serve --host 0.0.0.0 --port 8966 \
-  --device-secret-map ./device-secrets.json \
-  --app-id "$TIRTC_APP_ID" \
-  --remote-id "device-001" \
-  --issuer-url "http://<your-lan-ip>:8966/v1/tokens"
+tirtc-devtools-cli token serve --port 8966 \
+  --device-secret-map ./device-secrets.json
 ```
 
-```sh
-curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
-  -H 'Content-Type: application/json' \
-  --data '{"remote_id":"device-001"}'
-```
+## 内部一次性 Token 签发
 
-这个服务只做 Token 签名。业务鉴权要放在调用它之前。
-
-## Token 和二维码
-
-```sh
-export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
-export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
-export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
-export TIRTC_APP_ID="<APP_ID>"
-
-tirtc-devtools-cli --json token issue device-001 \
-  --endpoint "<TIRTC_ENDPOINT>"
-```
-
-`--openapi-endpoint` 只为兼容旧脚本保留，不会触发远端 OpenAPI。
-
-`token issue` 同样支持 `--device-secret-map ./device-secrets.json`，会按 `<remote_id>` 查对应的 `device_secret_key`。
+`token issue` 保留给内部自动化、旧 App 组合和排查脚本使用。新接入请优先使用 `token serve`，由客户端在连接前向业务服务请求短时 Token。
 
 ## 媒体资产
 

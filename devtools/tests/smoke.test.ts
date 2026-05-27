@@ -32,10 +32,11 @@ describe('tirtc-devtools-cli smoke test', () => {
     }
   });
 
-  it('should expose token issue with the new credential and app_id flags', () => {
+  it('should keep token issue as an internal legacy automation entry', () => {
     const cliBin = path.resolve(__dirname, '../bin/tirtc-devtools-cli.js');
     const output = execSync(`node ${cliBin} token issue --help`, {encoding: 'utf-8'});
 
+    expect(output).toContain('内部自动化 / legacy 调试入口');
     expect(output).toContain('--access-key-id <accessKeyId>');
     expect(output).toContain('--secret-key-id <secretKeyId>');
     expect(output).toContain('--device-secret-key <deviceSecretKey>');
@@ -53,10 +54,14 @@ describe('tirtc-devtools-cli smoke test', () => {
     expect(output).toContain('Usage: tirtc-devtools-cli token serve [options]');
     expect(output).toContain('--host <host>');
     expect(output).toContain('--port <port>');
-    expect(output).toContain('--app-id <appId>');
-    expect(output).toContain('--remote-id <remoteId>');
-    expect(output).toContain('--issuer-url <url>');
+    expect(output).not.toContain('--app-id <appId>');
+    expect(output).not.toContain('--remote-id <remoteId>');
+    expect(output).not.toContain('--endpoint <entry>');
+    expect(output).not.toContain('--issuer-url <url>');
+    expect(output).not.toContain('--qr-error-correction-level <level>');
+    expect(output).not.toContain('--ascii-max-columns <columns>');
     expect(output).toContain('--device-secret-map <path>');
+    expect(output).toContain('POST /v1/tokens');
     expect(output).toContain('does not implement login');
   });
 

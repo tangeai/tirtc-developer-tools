@@ -5,7 +5,7 @@
 | 目录 | 用途 |
 | --- | --- |
 | `token-issuer/` | Token 签发服务模拟。适合在服务端、本地网关或 Docker 环境里跑一个最小 issuer，给示例 App 或业务服务按需签发短时 Token。 |
-| `devtools/` | 日常开发调试 CLI。用于二维码、媒体资产准备、标准 device / client 联调和调试证据采集。 |
+| `devtools/` | 日常开发调试 CLI。用于启动 Token 签发 HTTP 服务、license 二维码、媒体资产准备、标准 device / client 联调和调试证据采集。 |
 
 ## Token 签发服务模拟
 

@@ -168,10 +168,22 @@ func runServe(args []string, stdout io.Writer, stderr io.Writer) int {
 	})
 	addr := fmt.Sprintf("%s:%d", strings.TrimSpace(*host), *port)
 	fmt.Fprintln(stderr, "[tirtc-issuer] listening on "+addr+"; secrets loaded from env/flags")
+	fmt.Fprintln(stderr, "[tirtc-issuer] token endpoint: POST "+tokenEndpointURL(strings.TrimSpace(*host), *port))
+	fmt.Fprintln(stderr, `[tirtc-issuer] request body example: {"remote_id":"device://your_device_id"}`)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		return writeError(stdout, stderr, false, Internal("issuer server failed"))
 	}
 	return 0
+}
+
+func tokenEndpointURL(host string, port int) string {
+	endpointHost := host
+	if endpointHost == "" || endpointHost == "0.0.0.0" || endpointHost == "::" || endpointHost == "[::]" {
+		endpointHost = "127.0.0.1"
+	} else if strings.Contains(endpointHost, ":") && !strings.HasPrefix(endpointHost, "[") {
+		endpointHost = "[" + endpointHost + "]"
+	}
+	return fmt.Sprintf("http://%s:%d/v1/tokens", endpointHost, port)
 }
 
 func handleTokenRequest(response http.ResponseWriter, request *http.Request, config secretConfig, defaultSubject string, defaultTTLSeconds int64) {
