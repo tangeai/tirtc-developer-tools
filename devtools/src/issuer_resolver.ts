@@ -62,9 +62,7 @@ export function resolveIssuerCliPath(fromDir: string = __dirname): string {
   }
 
   const packageRoot = resolveCliPackageRoot(fromDir);
-  const candidates = [
-    path.join(packageRoot, 'vendor/issuer-cli', platform, 'tirtc-issuer-cli'),
-  ];
+  const candidates = [];
   const repoRoot = resolveWorkspaceRepoRoot(fromDir);
   if (repoRoot) {
     candidates.push(path.join(
@@ -74,6 +72,13 @@ export function resolveIssuerCliPath(fromDir: string = __dirname): string {
       'tirtc-issuer-cli',
     ));
   }
+  candidates.push(path.join(
+    packageRoot,
+    '../.build/token-issuer/bin',
+    platform,
+    'tirtc-issuer-cli',
+  ));
+  candidates.push(path.join(packageRoot, 'vendor/issuer-cli', platform, 'tirtc-issuer-cli'));
 
   for (const candidate of candidates) {
     if (!fs.existsSync(candidate)) {

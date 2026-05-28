@@ -110,6 +110,7 @@ export async function issueToken(input: IssueTokenInput): Promise<string> {
 export function buildIssuerServeCommand(params: {
   host?: string;
   port?: string;
+  advertiseHost?: string;
   subject?: string;
   ttlSeconds?: string;
   accessKeyId?: string;
@@ -126,6 +127,7 @@ export function buildIssuerServeCommand(params: {
   };
   push('--host', params.host);
   push('--port', params.port);
+  push('--advertise-host', params.advertiseHost);
   push('--subject', params.subject);
   push('--ttl-seconds', params.ttlSeconds);
   push('--access-key-id', params.accessKeyId);

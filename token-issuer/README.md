@@ -46,6 +46,18 @@ token-issuer/script/serve.sh --host 0.0.0.0 --port 8966 \
 token-issuer/script/serve.sh --host 0.0.0.0 --port 8966
 ```
 
+如果服务监听 `0.0.0.0`，但需要明确告诉客户端填写哪个 IP，可以加：
+
+```sh
+token-issuer/script/serve.sh --host 0.0.0.0 --port 8966 --advertise-host 192.168.31.68
+```
+
+启动后输出的 `Token 签发服务地址` 是客户端配置页要填写的值，例如：
+
+```text
+http://192.168.31.68:8966
+```
+
 请求：
 
 ```sh

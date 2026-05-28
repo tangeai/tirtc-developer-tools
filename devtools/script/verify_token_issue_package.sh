@@ -55,6 +55,22 @@ for platform in macos-arm64 linux-x64; do
   fi
 done
 
+if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+  set +e
+  issuer_help=$("$mac_install_root/package/vendor/issuer-cli/macos-arm64/tirtc-issuer-cli" serve --help 2>&1)
+  issuer_help_status=$?
+  set -e
+  if [[ $issuer_help_status -ne 2 && $issuer_help_status -ne 0 ]]; then
+    echo "$issuer_help" >&2
+    exit $issuer_help_status
+  fi
+  if [[ "$issuer_help" != *"-advertise-host"* ]]; then
+    echo "[verify-token-package] bundled macos issuer is stale; missing -advertise-host" >&2
+    echo "$issuer_help" >&2
+    exit 1
+  fi
+fi
+
 echo "[verify-token-package] smoke test on macos-arm64 host package"
 set +e
 mac_output=$(env -i HOME="$HOME" PATH="$PATH" TIRTC_ACCESS_KEY_ID="$TIRTC_ACCESS_KEY_ID" TIRTC_SECRET_KEY_ID="$TIRTC_SECRET_KEY_ID" TIRTC_DEVICE_SECRET_KEY="$TIRTC_DEVICE_SECRET_KEY" TIRTC_APP_ID="$TIRTC_APP_ID" \

@@ -35,6 +35,12 @@ export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
 tirtc-devtools-cli token serve --port 8966
 ```
 
+启动后把输出里的 `Token 签发服务地址` 填到客户端，例如：
+
+```text
+http://192.168.31.68:8966
+```
+
 客户端请求：
 
 ```sh
@@ -66,6 +72,8 @@ curl -sS -X POST http://127.0.0.1:8966/v1/tokens \
 tirtc-devtools-cli token serve --port 8966 \
   --device-secret-map ./device-secrets.json
 ```
+
+如果服务监听 `0.0.0.0`，但希望启动摘要明确展示客户端应访问的 IP，可以加 `--advertise-host 192.168.31.68`。
 
 ## 内部一次性 Token 签发
 

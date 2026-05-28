@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -16,6 +17,9 @@ import (
 const (
 	defaultHost = "0.0.0.0"
 	defaultPort = 8966
+	tokenPath   = "/v1/tokens"
+
+	advertiseHostEnv = "TIRTC_TOKEN_ISSUER_ADVERTISE_HOST"
 )
 
 type outputEnvelope struct {
@@ -135,6 +139,7 @@ func runServe(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	host := fs.String("host", defaultHost, "listen host")
 	port := fs.Int("port", defaultPort, "listen port")
+	advertiseHost := fs.String("advertise-host", "", "host printed in the client-facing service address")
 	subject := fs.String("subject", "", "default token subject")
 	ttlSeconds := fs.Int64("ttl-seconds", DefaultTTLSeconds, "default token ttl seconds")
 	accessKeyID := fs.String("access-key-id", "", "access key id")
@@ -163,27 +168,75 @@ func runServe(args []string, stdout io.Writer, stderr io.Writer) int {
 		return writeError(stdout, stderr, false, err)
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/tokens", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(tokenPath, func(response http.ResponseWriter, request *http.Request) {
 		handleTokenRequest(response, request, config, strings.TrimSpace(*subject), *ttlSeconds)
 	})
 	addr := fmt.Sprintf("%s:%d", strings.TrimSpace(*host), *port)
-	fmt.Fprintln(stderr, "[tirtc-issuer] listening on "+addr+"; secrets loaded from env/flags")
-	fmt.Fprintln(stderr, "[tirtc-issuer] token endpoint: POST "+tokenEndpointURL(strings.TrimSpace(*host), *port))
-	fmt.Fprintln(stderr, `[tirtc-issuer] request body example: {"remote_id":"device://your_device_id"}`)
+	serviceURL := tokenServiceBaseURL(strings.TrimSpace(*host), choose(*advertiseHost, os.Getenv(advertiseHostEnv)), *port)
+	writeServeStartup(stderr, addr, serviceURL)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		return writeError(stdout, stderr, false, Internal("issuer server failed"))
 	}
 	return 0
 }
 
-func tokenEndpointURL(host string, port int) string {
-	endpointHost := host
-	if endpointHost == "" || endpointHost == "0.0.0.0" || endpointHost == "::" || endpointHost == "[::]" {
-		endpointHost = "127.0.0.1"
-	} else if strings.Contains(endpointHost, ":") && !strings.HasPrefix(endpointHost, "[") {
-		endpointHost = "[" + endpointHost + "]"
+func writeServeStartup(stderr io.Writer, listenAddr string, serviceURL string) {
+	endpointURL := serviceURL + tokenPath
+	fmt.Fprintln(stderr, "[tirtc-issuer] listening on "+listenAddr+"; secrets loaded from env/flags")
+	fmt.Fprintln(stderr, "")
+	fmt.Fprintln(stderr, "Token 签发服务地址:")
+	fmt.Fprintln(stderr, "  "+serviceURL)
+	fmt.Fprintln(stderr, "")
+	fmt.Fprintln(stderr, "HTTP API:")
+	fmt.Fprintln(stderr, "  POST "+tokenPath)
+	fmt.Fprintln(stderr, "  Content-Type: application/json")
+	fmt.Fprintln(stderr, "")
+	fmt.Fprintln(stderr, "Request:")
+	fmt.Fprintln(stderr, `  {"remote_id":"device://your_device_id"}`)
+	fmt.Fprintln(stderr, "")
+	fmt.Fprintln(stderr, "Response:")
+	fmt.Fprintln(stderr, `  {"token":"v1...","payload":{"scope":"connect:device://your_device_id"}}`)
+	fmt.Fprintln(stderr, "")
+	fmt.Fprintln(stderr, "cURL:")
+	fmt.Fprintln(stderr, "  curl -sS -X POST '"+endpointURL+"' \\")
+	fmt.Fprintln(stderr, "    -H 'Content-Type: application/json' \\")
+	fmt.Fprintln(stderr, `    --data '{"remote_id":"device://your_device_id"}'`)
+}
+
+func tokenServiceBaseURL(listenHost string, advertiseHost string, port int) string {
+	host := strings.TrimSpace(advertiseHost)
+	if host == "" {
+		host = strings.TrimSpace(listenHost)
 	}
-	return fmt.Sprintf("http://%s:%d/v1/tokens", endpointHost, port)
+	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
+		host = firstNonLoopbackIPv4()
+		if host == "" {
+			host = "127.0.0.1"
+		}
+	}
+	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
+		host = "[" + host + "]"
+	}
+	return fmt.Sprintf("http://%s:%d", host, port)
+}
+
+func firstNonLoopbackIPv4() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok || ipNet.IP == nil || ipNet.IP.IsLoopback() {
+			continue
+		}
+		ip := ipNet.IP.To4()
+		if ip == nil {
+			continue
+		}
+		return ip.String()
+	}
+	return ""
 }
 
 func handleTokenRequest(response http.ResponseWriter, request *http.Request, config secretConfig, defaultSubject string, defaultTTLSeconds int64) {

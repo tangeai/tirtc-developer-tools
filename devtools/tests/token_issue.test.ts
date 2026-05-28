@@ -124,11 +124,14 @@ JSON
     writeFakeIssuer(issuerPath, 'exit 0\n');
     const command = buildIssuerServeCommand({
       host: '127.0.0.1',
+      advertiseHost: '192.168.31.68',
       deviceSecretMap: '/tmp/device-secrets.json',
     });
 
     expect(command.args).toContain('--device-secret-map');
     expect(command.args).toContain('/tmp/device-secrets.json');
+    expect(command.args).toContain('--advertise-host');
+    expect(command.args).toContain('192.168.31.68');
   });
 
   it('surfaces issuer structured failures without OpenAPI fallback', async () => {

@@ -37,7 +37,7 @@ case "$mode" in
     npm --prefix "$cli_root" test -- --runInBand
     ;;
   package)
-    npm --prefix "$cli_root" test -- --runInBand tests/token_tool.test.ts tests/embedded_paths.test.ts tests/media_assets_prepare.test.ts tests/smoke.test.ts
+    npm --prefix "$cli_root" test -- --runInBand tests/token_tool.test.ts tests/embedded_paths.test.ts tests/issuer_resolver.test.ts tests/media_assets_prepare.test.ts tests/smoke.test.ts
     ;;
   real-transport)
     echo "[cli real-transport] use developer-tools/devtools/driver/script/run_capability_probe.sh"

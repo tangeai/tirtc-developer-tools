@@ -155,3 +155,33 @@ func TestLoadDeviceSecretMapNormalizesKeys(t *testing.T) {
 		t.Fatalf("unexpected secret: %s", secret)
 	}
 }
+
+func TestTokenServiceBaseURLUsesAdvertiseHost(t *testing.T) {
+	if got := tokenServiceBaseURL("0.0.0.0", "192.168.31.68", 8966); got != "http://192.168.31.68:8966" {
+		t.Fatalf("unexpected service url: %s", got)
+	}
+	if got := tokenServiceBaseURL("::", "fd00::1", 8966); got != "http://[fd00::1]:8966" {
+		t.Fatalf("unexpected ipv6 service url: %s", got)
+	}
+}
+
+func TestServeStartupOutputShowsBaseURLAndProtocolDetails(t *testing.T) {
+	var stderr bytes.Buffer
+	writeServeStartup(&stderr, "0.0.0.0:8966", "http://192.168.31.68:8966")
+	output := stderr.String()
+	for _, want := range []string{
+		"Token 签发服务地址:",
+		"http://192.168.31.68:8966",
+		"POST /v1/tokens",
+		`{"remote_id":"device://your_device_id"}`,
+		`{"token":"v1...","payload":{"scope":"connect:device://your_device_id"}}`,
+		"curl -sS -X POST 'http://192.168.31.68:8966/v1/tokens'",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("startup output missing %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "device_secret") {
+		t.Fatalf("startup output leaked secret wording:\n%s", output)
+	}
+}

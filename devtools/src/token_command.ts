@@ -57,6 +57,7 @@ type TokenIssueCommandOptions = {
 type TokenServeCommandOptions = {
   host?: string;
   port?: string;
+  advertiseHost?: string;
   subject?: string;
   ttlSeconds?: string;
   accessKeyId?: string;
@@ -403,6 +404,7 @@ async function runTokenServeFromCli(commandOptions: TokenServeCommandOptions): P
   const {file, args} = buildIssuerServeCommand({
     host: commandOptions.host,
     port: commandOptions.port,
+    advertiseHost: commandOptions.advertiseHost,
     subject: commandOptions.subject,
     ttlSeconds: commandOptions.ttlSeconds,
     accessKeyId: commandOptions.accessKeyId,
@@ -454,6 +456,7 @@ export function registerTokenCommands(
       .description('以前台进程启动开发调试用 HTTP token issuer；业务鉴权必须在调用 issuer 前完成')
       .option('--host <host>', 'listen host；默认 0.0.0.0')
       .option('--port <port>', 'listen port；默认 8966')
+      .option('--advertise-host <host>', '客户端可访问的服务 host；仅用于启动摘要和 cURL 示例')
       .option('--subject <subject>', 'default token subject')
       .option('--ttl-seconds <seconds>', 'default token ttl seconds')
       .option('--access-key-id <accessKeyId>', '显式 access_key_id；不传时读取 ' + kTokenIssueAccessKeyIdEnvVar)
