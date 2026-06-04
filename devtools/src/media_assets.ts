@@ -179,6 +179,30 @@ function assertPrepareRequest(request: PrepareMediaAssetsRequest): void {
   }
 }
 
+function replacePathWithSymlink(linkPath: string, targetPath: string, type: 'file' | 'dir'): void {
+  fs.rmSync(linkPath, {recursive: true, force: true});
+  const relativeTarget = path.relative(path.dirname(linkPath), targetPath) || targetPath;
+  fs.symlinkSync(relativeTarget, linkPath, type);
+}
+
+function refreshStableAssetEntrypoint(outputRoot: string, assetsDir: string): string {
+  const manifestPath = path.join(assetsDir, 'manifest.json');
+  const videoDir = path.join(assetsDir, 'video');
+  const audioDir = path.join(assetsDir, 'audio');
+  if (!fs.existsSync(manifestPath) || !fs.existsSync(videoDir) || !fs.existsSync(audioDir)) {
+    throw new Error('media assets prepare returned incomplete assets directory');
+  }
+  if (path.resolve(outputRoot) === path.resolve(assetsDir)) {
+    return manifestPath;
+  }
+
+  fs.mkdirSync(outputRoot, {recursive: true});
+  replacePathWithSymlink(path.join(outputRoot, 'manifest.json'), manifestPath, 'file');
+  replacePathWithSymlink(path.join(outputRoot, 'video'), videoDir, 'dir');
+  replacePathWithSymlink(path.join(outputRoot, 'audio'), audioDir, 'dir');
+  return path.join(outputRoot, 'manifest.json');
+}
+
 function execPrepareWithProgress(
   file: string,
   args: string[],
@@ -327,9 +351,12 @@ export async function prepareMediaAssets(
     throw new Error('media assets prepare returned incomplete result');
   }
 
+  const assetsDir = path.resolve(parsed.assets_dir);
+  const stableManifestPath = refreshStableAssetEntrypoint(outputRoot, assetsDir);
+
   return {
-    assets_dir: path.resolve(parsed.assets_dir),
-    manifest_path: path.resolve(parsed.manifest_path),
+    assets_dir: assetsDir,
+    manifest_path: path.resolve(stableManifestPath),
     cache_hit: parsed.cache_hit,
   };
 }

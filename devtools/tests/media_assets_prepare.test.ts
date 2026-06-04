@@ -29,10 +29,14 @@ describe('media assets prepare contract', () => {
         execFile: async (file, args) => {
           calledFile = file;
           calledArgs = args;
+          const assetsDir = path.join(outputRoot, 'assets-id');
+          fs.mkdirSync(path.join(assetsDir, 'video'), {recursive: true});
+          fs.mkdirSync(path.join(assetsDir, 'audio'), {recursive: true});
+          fs.writeFileSync(path.join(assetsDir, 'manifest.json'), '{}\n');
           return {
             stdout: JSON.stringify({
-              assets_dir: path.join(outputRoot, 'assets-id'),
-              manifest_path: path.join(outputRoot, 'assets-id', 'manifest.json'),
+              assets_dir: assetsDir,
+              manifest_path: path.join(assetsDir, 'manifest.json'),
               cache_hit: false,
             }),
           };
@@ -52,7 +56,10 @@ describe('media assets prepare contract', () => {
       '--overwrite',
     ]);
     expect(result.assets_dir).toBe(path.resolve(outputRoot, 'assets-id'));
-    expect(result.manifest_path).toBe(path.resolve(outputRoot, 'assets-id', 'manifest.json'));
+    expect(result.manifest_path).toBe(path.resolve(outputRoot, 'manifest.json'));
+    expect(fs.lstatSync(path.join(outputRoot, 'manifest.json')).isSymbolicLink()).toBe(true);
+    expect(fs.lstatSync(path.join(outputRoot, 'video')).isSymbolicLink()).toBe(true);
+    expect(fs.lstatSync(path.join(outputRoot, 'audio')).isSymbolicLink()).toBe(true);
     expect(result.cache_hit).toBe(false);
   });
 
@@ -138,11 +145,17 @@ describe('media assets prepare contract', () => {
             '[prepare_runtime_media_dataset] progress: checking source media streams',
             '[prepare_runtime_media_dataset] progress: encoding h264 video track',
           ].join('\n'),
-          stdout: JSON.stringify({
-            assets_dir: path.join(outputRoot, 'assets-id'),
-            manifest_path: path.join(outputRoot, 'assets-id', 'manifest.json'),
-            cache_hit: false,
-          }),
+          stdout: (() => {
+            const assetsDir = path.join(outputRoot, 'assets-id');
+            fs.mkdirSync(path.join(assetsDir, 'video'), {recursive: true});
+            fs.mkdirSync(path.join(assetsDir, 'audio'), {recursive: true});
+            fs.writeFileSync(path.join(assetsDir, 'manifest.json'), '{}\n');
+            return JSON.stringify({
+              assets_dir: assetsDir,
+              manifest_path: path.join(assetsDir, 'manifest.json'),
+              cache_hit: false,
+            });
+          })(),
         }),
       },
     );
