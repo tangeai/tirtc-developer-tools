@@ -48,7 +48,8 @@ resolve_runtime_root() {
   printf '%s\n' "$DEVTOOLS_ROOT/3rd/runtime/$PLATFORM"
 }
 
-RUNTIME_ROOT="$(resolve_runtime_root)"
+RUNTIME_ROOT_RAW="$(resolve_runtime_root)"
+RUNTIME_ROOT="$(cd "$RUNTIME_ROOT_RAW" && pwd)"
 RUNTIME_INCLUDE_DIR="$RUNTIME_ROOT/include"
 RUNTIME_LIB_DIR="$RUNTIME_ROOT/lib"
 FFMPEG_STATIC_DIR="$RUNTIME_LIB_DIR"
@@ -69,8 +70,9 @@ required=(
   "$RUNTIME_LIB_DIR/libwebrtc_apm.a"
   "$RUNTIME_LIB_DIR/libxlog.a"
   "$RUNTIME_LIB_DIR/libTiRTC.a"
-  "$RUNTIME_LIB_DIR/libssl.a"
-  "$RUNTIME_LIB_DIR/libcrypto.a"
+  "$RUNTIME_LIB_DIR/libmbedtls.a"
+  "$RUNTIME_LIB_DIR/libmbedx509.a"
+  "$RUNTIME_LIB_DIR/libmbedcrypto.a"
   "$FFMPEG_STATIC_DIR/libavcodec.a"
   "$FFMPEG_STATIC_DIR/libavutil.a"
   "$FFMPEG_STATIC_DIR/libswscale.a"
@@ -90,7 +92,6 @@ else
   required+=(
     "$RUNTIME_LIB_DIR/libwebrtc.a"
     "$RUNTIME_LIB_DIR/libusrsctp.a"
-    "$RUNTIME_LIB_DIR/libmbedtls.a"
   )
 fi
 
@@ -175,11 +176,15 @@ runtime_libs=(
 if [[ -f "$RUNTIME_LIB_DIR/libmatrix_runtime_credential.a" ]]; then
   runtime_libs+=("$RUNTIME_LIB_DIR/libmatrix_runtime_credential.a")
 fi
+runtime_libs+=(
+  "$RUNTIME_LIB_DIR/libmbedtls.a" \
+  "$RUNTIME_LIB_DIR/libmbedx509.a" \
+  "$RUNTIME_LIB_DIR/libmbedcrypto.a"
+)
 if [[ "$PLATFORM" == "linux-x64" ]]; then
   runtime_libs+=(
     "$RUNTIME_LIB_DIR/libwebrtc.a" \
-    "$RUNTIME_LIB_DIR/libusrsctp.a" \
-    "$RUNTIME_LIB_DIR/libmbedtls.a"
+    "$RUNTIME_LIB_DIR/libusrsctp.a"
   )
 fi
 
@@ -203,8 +208,6 @@ if [[ "$PLATFORM" == "macos-arm64" ]]; then
     -o "$OUTPUT" \
     "${runtime_libs[@]}" \
     "$RUNTIME_LIB_DIR/libTGTRP.a" \
-    "$RUNTIME_LIB_DIR/libssl.a" \
-    "$RUNTIME_LIB_DIR/libcrypto.a" \
     "${ffmpeg_libs[@]}" \
     -framework AudioToolbox \
     -framework Foundation \
@@ -229,8 +232,6 @@ else
     -o "$OUTPUT" \
     -Wl,--start-group \
     "${runtime_libs[@]}" \
-    "$RUNTIME_LIB_DIR/libssl.a" \
-    "$RUNTIME_LIB_DIR/libcrypto.a" \
     "${ffmpeg_libs[@]}" \
     -Wl,--end-group \
     -ldl \
