@@ -452,8 +452,11 @@ function codecOrDefault(raw?: string): string {
 
 function audioCodecOrDefault(raw?: string): string {
   const codec = raw?.trim() || 'g711a';
-  if (codec !== 'g711a' && codec !== 'aac') {
-    throw roleUsageReasonError('audio_codec_unsupported', 'audio-codec must be g711a or aac');
+  if (codec !== 'pcm' && codec !== 'g711a' && codec !== 'aac' && codec !== 'opus' && codec !== 'amr') {
+    throw roleUsageReasonError(
+      'audio_codec_unsupported',
+      'audio-codec must be pcm, g711a, aac, opus, or amr',
+    );
   }
   return codec;
 }
@@ -475,6 +478,12 @@ function audioChannelsOrDefault(raw?: string | number): number {
     throw roleUsageReasonError('audio_format_unsupported', 'audio-channels must be 1 or 2');
   }
   return channels;
+}
+
+function validateAudioFormat(codec: string, sampleRateHz: number, channels: number): void {
+  if (codec === 'amr' && (sampleRateHz !== 8000 || channels !== 1)) {
+    throw roleUsageReasonError('audio_format_unsupported', 'amr audio requires 8000 Hz mono');
+  }
 }
 
 function consumerOrDefault(raw?: string): string {
@@ -518,6 +527,7 @@ function buildDeviceRequest(
   const audioCodec = audioCodecOrDefault(options.audioCodec);
   const audioSampleRateHz = audioSampleRateOrDefault(options.audioSampleRate);
   const audioChannels = audioChannelsOrDefault(options.audioChannels);
+  validateAudioFormat(audioCodec, audioSampleRateHz, audioChannels);
   const executionId = 'cli-device-' + codec + '-' + executionSuffix();
   const caseId = 'devtools-cli-device.' + codec;
   const deviceIdentity = resolveDeviceIdentity(options);
@@ -606,6 +616,7 @@ function buildClientRequest(
     bootstrap?.audio_sample_rate_hz ?? bootstrap?.sample_rate_hz,
   );
   const audioChannels = audioChannelsOrDefault(bootstrap?.audio_channels ?? bootstrap?.channels);
+  validateAudioFormat(audioCodec, audioSampleRateHz, audioChannels);
   return {
     schema_version: 1,
     execution_id: executionId,

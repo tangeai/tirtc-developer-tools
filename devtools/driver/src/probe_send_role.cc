@@ -96,7 +96,7 @@ bool is_transient_transport_send_error(TirtcError status) {
 }
 
 void emit_session_first_audio(DriverContext* context, int session_index, int64_t pts_us,
-                              const PacketEntry& packet, size_t bytes) {
+                              size_t bytes) {
   (void)emit_event(
       context, "info", "media", "media.audio_send.session_first_packet",
       "{\"session_index\":" + std::to_string(session_index) +
@@ -106,8 +106,7 @@ void emit_session_first_audio(DriverContext* context, int session_index, int64_t
           ",\"channels\":" + std::to_string(context->request.audio_channels) +
           ",\"bits_per_sample\":" + std::to_string(kAudioBitsPerSample) +
           ",\"audio_asset_key\":\"" + json_escape(context->audio_asset_key) +
-          "\",\"samples_per_channel\":" + std::to_string(packet.samples_per_channel) +
-          ",\"pts_us\":" + std::to_string(pts_us) + ",\"bytes\":" + std::to_string(bytes) + "}");
+          "\",\"pts_us\":" + std::to_string(pts_us) + ",\"bytes\":" + std::to_string(bytes) + "}");
   if (context->first_audio_packet_ms >= 0) {
     return;
   }
@@ -121,8 +120,7 @@ void emit_session_first_audio(DriverContext* context, int session_index, int64_t
           ",\"channels\":" + std::to_string(context->request.audio_channels) +
           ",\"bits_per_sample\":" + std::to_string(kAudioBitsPerSample) +
           ",\"audio_asset_key\":\"" + json_escape(context->audio_asset_key) +
-          "\",\"samples_per_channel\":" + std::to_string(packet.samples_per_channel) +
-          ",\"pts_us\":" + std::to_string(pts_us) + ",\"bytes\":" + std::to_string(bytes) + "}");
+          "\",\"pts_us\":" + std::to_string(pts_us) + ",\"bytes\":" + std::to_string(bytes) + "}");
 }
 
 std::string emit_session_first_video(DriverContext* context, int session_index,
@@ -342,10 +340,10 @@ void send_stream_message_for_session(DriverContext* context, ActiveSendSession* 
   session->next_stream_message_send_at = std::chrono::steady_clock::now() + kStreamMessagePeriod;
 }
 
-bool attach_active_session(DriverContext* context, SendInputLifecycle* inputs,
-                           const SendAssets& assets, TirtcConn* connection, int session_index,
-                           std::vector<std::unique_ptr<ActiveSendSession>>* active_sessions,
-                           std::string* reason_code, std::string* event_kind) {
+bool register_active_session_callbacks(
+    DriverContext* context, TirtcConn* connection, int session_index,
+    std::vector<std::unique_ptr<ActiveSendSession>>* active_sessions, std::string* reason_code,
+    std::string* event_kind) {
   auto session = std::make_unique<ActiveSendSession>();
   session->connection = connection;
   session->session_index = session_index;
@@ -373,40 +371,50 @@ bool attach_active_session(DriverContext* context, SendInputLifecycle* inputs,
                        json_escape(context->request.remote_id) + "\",\"elapsed_ms\":" +
                        std::to_string(elapsed_ms_since_start(context)) + "}");
 
-  if (tirtc_audio_encoded_input_attach(inputs->audio_input, connection,
+  active_sessions->push_back(std::move(session));
+  return true;
+}
+
+bool attach_active_session_media(DriverContext* context, SendInputLifecycle* inputs,
+                                 const SendAssets& assets, ActiveSendSession* session,
+                                 std::string* reason_code, std::string* event_kind) {
+  if (session == nullptr || session->connection == nullptr) {
+    *reason_code = "media_send_failed";
+    *event_kind = "media.audio_send.failed";
+    return false;
+  }
+
+  if (tirtc_audio_encoded_input_attach(inputs->audio_input, session->connection,
                                        context->request.audio_stream_id) != TIRTC_ERROR_OK) {
     *reason_code = "media_send_failed";
     *event_kind = "media.audio_send.failed";
-    cleanup_active_session(context, inputs, session.get(), "audio_attach_failed", "",
-                           static_cast<int>(TIRTC_ERROR_OK));
     return false;
   }
   session->audio_attached = true;
-  if (tirtc_video_encoded_input_attach(inputs->video_input, connection,
+  if (tirtc_video_encoded_input_attach(inputs->video_input, session->connection,
                                        context->request.video_stream_id) != TIRTC_ERROR_OK) {
     *reason_code = "codec_unsupported";
     *event_kind = "media.video_send.failed";
-    cleanup_active_session(context, inputs, session.get(), "video_attach_failed", "",
-                           static_cast<int>(TIRTC_ERROR_OK));
     return false;
   }
   session->video_attached = true;
 
   (void)emit_event(
       context, "info", "media", "media.audio_send.start",
-      "{\"session_index\":" + std::to_string(session_index) +
+      "{\"session_index\":" + std::to_string(session->session_index) +
           ",\"stream_id\":" + std::to_string(static_cast<int>(context->request.audio_stream_id)) +
           ",\"audio_codec\":\"" + json_escape(context->request.audio_codec) +
           "\",\"sample_rate_hz\":" + std::to_string(context->request.audio_sample_rate_hz) +
           ",\"channels\":" + std::to_string(context->request.audio_channels) +
           ",\"bits_per_sample\":" + std::to_string(kAudioBitsPerSample) +
           ",\"audio_asset_key\":\"" + json_escape(context->audio_asset_key) + "\"}");
-  (void)emit_event(context, "info", "media", "media.video_send.start",
-                   "{\"session_index\":" + std::to_string(session_index) + ",\"stream_id\":" +
-                       std::to_string(static_cast<int>(context->request.video_stream_id)) +
-                       ",\"codec\":\"" + json_escape(context->request.video_codec) + "\"}");
+  (void)emit_event(
+      context, "info", "media", "media.video_send.start",
+      "{\"session_index\":" + std::to_string(session->session_index) +
+          ",\"stream_id\":" + std::to_string(static_cast<int>(context->request.video_stream_id)) +
+          ",\"codec\":\"" + json_escape(context->request.video_codec) + "\"}");
   (void)emit_event(context, "info", "media", "media.asset_cycle.config",
-                   "{\"session_index\":" + std::to_string(session_index) +
+                   "{\"session_index\":" + std::to_string(session->session_index) +
                        ",\"audio_packet_count\":" + std::to_string(assets.audio_packets.size()) +
                        ",\"video_packet_count\":" + std::to_string(assets.video_packets.size()) +
                        ",\"audio_duration_us\":" + std::to_string(assets.audio_track_duration_us) +
@@ -414,8 +422,7 @@ bool attach_active_session(DriverContext* context, SendInputLifecycle* inputs,
                        ",\"cycle_duration_us\":" + std::to_string(assets.asset_cycle_duration_us) +
                        ",\"duration_ms\":" + std::to_string(context->request.duration_ms) + "}");
 
-  send_stream_message_for_session(context, session.get());
-  active_sessions->push_back(std::move(session));
+  send_stream_message_for_session(context, session);
   return true;
 }
 
@@ -620,24 +627,29 @@ bool run_send_role(DriverContext* context) {
       if (connection == nullptr) {
         continue;
       }
-      if (!ensure_media_ready()) {
-        return false;
-      }
-      if (active_sessions.empty()) {
-        reset_media_timeline();
-      }
+      const bool was_first_session = active_sessions.empty();
       session_index += 1;
+      std::string reason_code;
+      std::string event_kind;
+      if (!register_active_session_callbacks(context, connection, session_index, &active_sessions,
+                                             &reason_code, &event_kind)) {
+        return fail_media_send(reason_code, event_kind, "", static_cast<int>(TIRTC_ERROR_OK));
+      }
       (void)emit_event(context, "info", "connection", "connection.connect.done",
                        "{\"session_index\":" + std::to_string(session_index) + ",\"remote_id\":\"" +
                            json_escape(context->request.remote_id) + "\",\"active_sessions\":" +
-                           std::to_string(active_sessions.size() + 1) + ",\"elapsed_ms\":0}");
-
-      std::string reason_code;
-      std::string event_kind;
-      if (!attach_active_session(context, &inputs, assets, connection, session_index,
-                                 &active_sessions, &reason_code, &event_kind)) {
+                           std::to_string(active_sessions.size()) + ",\"elapsed_ms\":0}");
+      if (!ensure_media_ready()) {
+        return false;
+      }
+      if (was_first_session) {
+        reset_media_timeline();
+      }
+      if (!attach_active_session_media(context, &inputs, assets, active_sessions.back().get(),
+                                       &reason_code, &event_kind)) {
         return fail_media_send(reason_code, event_kind, "", static_cast<int>(TIRTC_ERROR_OK));
       }
+      drain_pending_command_echoes(context);
       accepted_any_session = true;
     }
     return true;
@@ -745,7 +757,6 @@ bool run_send_role(DriverContext* context) {
       frame.codec = assets.audio_options.codec;
       frame.sample_rate_hz = assets.audio_options.sample_rate_hz;
       frame.channels = assets.audio_options.channels;
-      frame.samples_per_channel = audio_packet.samples_per_channel;
       frame.pts_us = audio_pts_us;
       frame.data = payload.data();
       frame.data_bytes = payload.size();
@@ -764,8 +775,7 @@ bool run_send_role(DriverContext* context) {
       for (const auto& session : active_sessions) {
         if (!session->sent_first_audio) {
           session->sent_first_audio = true;
-          emit_session_first_audio(context, session->session_index, audio_pts_us, audio_packet,
-                                   payload.size());
+          emit_session_first_audio(context, session->session_index, audio_pts_us, payload.size());
         }
       }
       audio_packet_index += 1;

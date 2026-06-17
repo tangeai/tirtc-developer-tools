@@ -1,6 +1,7 @@
 #include "probe_send_session.h"
 
 #include <algorithm>
+#include <array>
 #include <system_error>
 
 namespace devtools_driver_probe {
@@ -9,6 +10,14 @@ namespace {
 constexpr int kReadAllPackets = 0;
 constexpr int64_t kDefaultAudioPacketDurationUs = 40000;
 constexpr int64_t kDefaultVideoPacketDurationUs = 66667;
+constexpr uint32_t kAmrNbSampleRateHz = 8000;
+constexpr uint32_t kAmrNbChannels = 1;
+constexpr uint8_t kAmrNbHeaderPaddingMask = 0x83;
+constexpr uint8_t kAmrNbFrameTypeMask = 0x78;
+constexpr uint8_t kAmrNbFrameTypeShift = 3;
+constexpr std::array<size_t, 8> kAmrNbStorageFrameBytesByFt = {
+    13, 14, 16, 18, 20, 21, 27, 32,
+};
 
 int64_t infer_packet_interval_us(const std::vector<PacketEntry>& packets,
                                  int64_t fallback_interval_us) {
@@ -27,33 +36,58 @@ int64_t track_loop_duration_us(const std::vector<PacketEntry>& packets,
   return packets.back().pts_us + interval_us;
 }
 
+bool is_valid_amr_nb_storage_frame(const std::vector<uint8_t>& bytes) {
+  if (bytes.empty()) {
+    return false;
+  }
+
+  const uint8_t header = bytes[0];
+  if ((header & kAmrNbHeaderPaddingMask) != 0) {
+    return false;
+  }
+  const uint8_t frame_type =
+      static_cast<uint8_t>((header & kAmrNbFrameTypeMask) >> kAmrNbFrameTypeShift);
+  if (frame_type >= kAmrNbStorageFrameBytesByFt.size()) {
+    return false;
+  }
+  return bytes.size() == kAmrNbStorageFrameBytesByFt[frame_type];
+}
+
+}  // namespace
+
 bool validate_audio_packet_index(const std::filesystem::path& audio_path,
-                                 const std::string& audio_codec, uint32_t channels,
-                                 const std::vector<PacketEntry>& packets) {
+                                 const std::string& audio_codec, uint32_t sample_rate_hz,
+                                 uint32_t channels, const std::vector<PacketEntry>& packets) {
+  if (audio_codec == "amr" &&
+      (sample_rate_hz != kAmrNbSampleRateHz || channels != kAmrNbChannels)) {
+    return false;
+  }
+
   std::error_code error;
   const uintmax_t audio_bytes = std::filesystem::file_size(audio_path, error);
   if (error || packets.empty()) {
     return false;
   }
   for (const PacketEntry& packet : packets) {
-    if (packet.size == 0 || packet.samples_per_channel == 0) {
+    if (packet.size == 0) {
       return false;
     }
     if (packet.offset > audio_bytes || packet.size > audio_bytes - packet.offset) {
       return false;
     }
-    if (audio_codec == "g711a" &&
-        packet.size != static_cast<size_t>(packet.samples_per_channel) * channels) {
+    if (audio_codec == "pcm" &&
+        (packet.size % (static_cast<size_t>(channels) * sizeof(int16_t))) != 0) {
       return false;
     }
-    if (audio_codec == "aac" && packet.samples_per_channel != 1024) {
-      return false;
+    if (audio_codec == "amr") {
+      const std::vector<uint8_t> packet_bytes = read_packet_bytes(audio_path, packet);
+      if (!is_valid_amr_nb_storage_frame(packet_bytes)) {
+        return false;
+      }
     }
   }
   return true;
 }
-
-}  // namespace
 
 bool prepare_send_assets(DriverContext* context, SendAssets* assets, std::string* reason_code,
                          std::string* event_kind) {
@@ -118,6 +152,7 @@ bool prepare_send_assets(DriverContext* context, SendAssets* assets, std::string
   assets->audio_packets = read_audio_packets(assets->audio_index_path, kReadAllPackets);
   assets->video_packets = read_packets(assets->video_index_path, kReadAllPackets);
   if (!validate_audio_packet_index(assets->audio_path, context->request.audio_codec,
+                                   context->request.audio_sample_rate_hz,
                                    context->request.audio_channels, assets->audio_packets)) {
     *reason_code = "audio_packet_index_invalid";
     *event_kind = "media.audio_send.packet_index_invalid";

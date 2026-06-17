@@ -283,6 +283,28 @@ describe('role driver preflight failures', () => {
     });
   });
 
+  it('accepts OPUS audio codec in device request preflight', async () => {
+    process.env.TIRTC_DEVICE_ID = 'server-device-id';
+    process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
+    process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeDriver(tempRoot);
+    process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
+    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+
+    const artifactRoot = path.join(tempRoot, 'device-opus-audio-codec');
+    await expect(runDeviceStart({
+      artifactRoot,
+      source: makeAssetRoot(tempRoot),
+      audioCodec: 'opus',
+      audioSampleRate: '16000',
+      audioChannels: '2',
+    }, {json: true})).resolves.toBe(1);
+
+    const request = JSON.parse(
+      fs.readFileSync(path.join(artifactRoot, 'request.redacted.json'), 'utf8'),
+    ) as {media: {audio: {codec: string; sample_rate_hz: number; channels: number}}};
+    expect(request.media.audio).toEqual({codec: 'opus', sample_rate_hz: 16000, channels: 2});
+  });
+
   it('reports unsupported audio codec with a specific reason code', async () => {
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
@@ -290,7 +312,7 @@ describe('role driver preflight failures', () => {
     await expect(runDeviceStart({
       artifactRoot: path.join(tempRoot, 'device-invalid-audio-codec'),
       source: makeAssetRoot(tempRoot),
-      audioCodec: 'opus',
+      audioCodec: 'vorbis',
     }, {json: true})).resolves.toBe(2);
 
     expect(lastEnvelope().data).toMatchObject({
@@ -310,6 +332,27 @@ describe('role driver preflight failures', () => {
       artifactRoot: path.join(tempRoot, 'device-invalid-audio-format'),
       source: makeAssetRoot(tempRoot),
       audioSampleRate: '44100',
+    }, {json: true})).resolves.toBe(2);
+
+    expect(lastEnvelope().data).toMatchObject({
+      status: 'failed',
+      exit_code: 2,
+      role: 'device',
+      reason_code: 'audio_format_unsupported',
+      failed_stage: 'config',
+    });
+  });
+
+  it('rejects AMR audio format outside AMR-NB mono', async () => {
+    process.env.TIRTC_DEVICE_ID = 'server-device-id';
+    process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
+
+    await expect(runDeviceStart({
+      artifactRoot: path.join(tempRoot, 'device-invalid-amr-audio-format'),
+      source: makeAssetRoot(tempRoot),
+      audioCodec: 'amr',
+      audioSampleRate: '16000',
+      audioChannels: '1',
     }, {json: true})).resolves.toBe(2);
 
     expect(lastEnvelope().data).toMatchObject({

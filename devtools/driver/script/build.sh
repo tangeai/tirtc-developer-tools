@@ -79,7 +79,7 @@ required=(
   "$FFMPEG_STATIC_DIR/libswresample.a"
   "$FFMPEG_STATIC_DIR/libavformat.a"
   "$FFMPEG_STATIC_DIR/libavfilter.a"
-  "$FFMPEG_STATIC_DIR/libpostproc.a"
+  "$FFMPEG_STATIC_DIR/libopencore-amrnb.a"
   "$FFMPEG_STATIC_DIR/libx264.a"
 )
 
@@ -195,9 +195,12 @@ ffmpeg_libs=(
   "$FFMPEG_STATIC_DIR/libswresample.a" \
   "$FFMPEG_STATIC_DIR/libavformat.a" \
   "$FFMPEG_STATIC_DIR/libavfilter.a" \
-  "$FFMPEG_STATIC_DIR/libpostproc.a" \
+  "$FFMPEG_STATIC_DIR/libopencore-amrnb.a" \
   "$FFMPEG_STATIC_DIR/libx264.a"
 )
+if [[ -f "$FFMPEG_STATIC_DIR/libpostproc.a" ]]; then
+  ffmpeg_libs+=("$FFMPEG_STATIC_DIR/libpostproc.a")
+fi
 
 if [[ "$PLATFORM" == "macos-arm64" ]]; then
   c++ \

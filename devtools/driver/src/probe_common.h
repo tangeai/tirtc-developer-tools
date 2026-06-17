@@ -53,7 +53,6 @@ struct PacketEntry {
   int64_t pts_us = 0;
   uint64_t offset = 0;
   size_t size = 0;
-  uint32_t samples_per_channel = 0;
   bool is_key_frame = false;
 };
 

@@ -337,7 +337,9 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
              context->request.output_consumer != "frame_dump") {
     *out_reason = "invalid_request";
   } else if ((context->request.role == "device" || context->request.role == "send") &&
-             (context->request.audio_codec != "g711a" && context->request.audio_codec != "aac")) {
+             (context->request.audio_codec != "pcm" && context->request.audio_codec != "g711a" &&
+              context->request.audio_codec != "aac" && context->request.audio_codec != "opus" &&
+              context->request.audio_codec != "amr")) {
     *out_reason = "audio_codec_unsupported";
   } else if ((context->request.role == "device" || context->request.role == "send") &&
              (context->request.audio_sample_rate_hz != 8000 &&
@@ -345,6 +347,11 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
     *out_reason = "audio_format_unsupported";
   } else if ((context->request.role == "device" || context->request.role == "send") &&
              (context->request.audio_channels != 1 && context->request.audio_channels != 2)) {
+    *out_reason = "audio_format_unsupported";
+  } else if ((context->request.role == "device" || context->request.role == "send") &&
+             context->request.audio_codec == "amr" &&
+             (context->request.audio_sample_rate_hz != 8000 ||
+              context->request.audio_channels != 1)) {
     *out_reason = "audio_format_unsupported";
   } else if (!std::filesystem::exists(std::filesystem::path(context->runtime_root) / "include" /
                                       "tirtc" / "av.h") ||

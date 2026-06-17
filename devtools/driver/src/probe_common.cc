@@ -353,8 +353,17 @@ std::filesystem::path codec_packets_path(const std::string& asset_root, const st
 }
 
 TirtcMediaCodec audio_codec_to_runtime_codec(const std::string& codec) {
+  if (codec == "pcm") {
+    return TIRTC_MEDIA_CODEC_AUDIO_PCM;
+  }
   if (codec == "aac") {
     return TIRTC_MEDIA_CODEC_AUDIO_AAC;
+  }
+  if (codec == "opus") {
+    return TIRTC_MEDIA_CODEC_AUDIO_OPUS;
+  }
+  if (codec == "amr") {
+    return TIRTC_MEDIA_CODEC_AUDIO_AMR;
   }
   return TIRTC_MEDIA_CODEC_AUDIO_G711A;
 }
@@ -365,7 +374,16 @@ std::string audio_track_key(const std::string& codec, uint32_t sample_rate_hz, u
 
 std::filesystem::path audio_media_path(const std::string& asset_root, const std::string& codec,
                                        uint32_t sample_rate_hz, uint32_t channels) {
-  const std::string extension = codec == "aac" ? ".aac" : ".g711a";
+  std::string extension = ".g711a";
+  if (codec == "pcm") {
+    extension = ".pcm";
+  } else if (codec == "aac") {
+    extension = ".aac";
+  } else if (codec == "opus") {
+    extension = ".opus";
+  } else if (codec == "amr") {
+    extension = ".amr";
+  }
   return std::filesystem::path(asset_root) / "audio" /
          (audio_track_key(codec, sample_rate_hz, channels) + extension);
 }
@@ -404,7 +422,7 @@ std::vector<PacketEntry> read_audio_packets(const std::filesystem::path& path, i
   std::ifstream input(path);
   std::vector<PacketEntry> packets;
   std::string line;
-  if (!std::getline(input, line) || line != "pts_us,offset,size,samples_per_channel") {
+  if (!std::getline(input, line) || line != "pts_us,offset,size") {
     return packets;
   }
   try {
@@ -418,12 +436,7 @@ std::vector<PacketEntry> read_audio_packets(const std::filesystem::path& path, i
       packet.offset = static_cast<uint64_t>(std::stoull(value));
       std::getline(stream, value, ',');
       packet.size = static_cast<size_t>(std::stoull(value));
-      if (!std::getline(stream, value, ',')) {
-        packets.clear();
-        return packets;
-      }
-      packet.samples_per_channel = static_cast<uint32_t>(std::stoul(value));
-      if (packet.size == 0 || packet.samples_per_channel == 0) {
+      if (std::getline(stream, value, ',') || packet.size == 0) {
         packets.clear();
         return packets;
       }
