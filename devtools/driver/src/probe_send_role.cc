@@ -22,6 +22,7 @@ constexpr int64_t kNoPacketPtsUs = std::numeric_limits<int64_t>::max();
 constexpr auto kConnectionPollInterval = std::chrono::milliseconds(20);
 constexpr auto kStreamMessagePeriod = std::chrono::seconds(10);
 constexpr auto kStreamMessageRetryDelay = std::chrono::milliseconds(250);
+constexpr auto kMediaSendPacingLogInterval = std::chrono::seconds(1);
 constexpr int kStreamMessageMinPeriodMs = 8000;
 constexpr int kStreamMessageMaxPeriodMs = 12000;
 
@@ -69,6 +70,32 @@ struct ActiveSendSession {
   std::chrono::steady_clock::time_point first_packet_deadline{};
 };
 
+struct MediaSendPacingStats {
+  std::chrono::steady_clock::time_point last_emit_at{};
+  uint64_t audio_packets = 0;
+  uint64_t video_packets = 0;
+  uint64_t audio_bytes = 0;
+  uint64_t video_bytes = 0;
+  int64_t max_target_late_us = 0;
+  int64_t max_audio_submit_us = 0;
+  int64_t max_video_submit_us = 0;
+  int64_t last_audio_pts_us = -1;
+  int64_t last_video_pts_us = -1;
+
+  void reset(std::chrono::steady_clock::time_point now) {
+    last_emit_at = now;
+    audio_packets = 0;
+    video_packets = 0;
+    audio_bytes = 0;
+    video_bytes = 0;
+    max_target_late_us = 0;
+    max_audio_submit_us = 0;
+    max_video_submit_us = 0;
+    last_audio_pts_us = -1;
+    last_video_pts_us = -1;
+  }
+};
+
 bool take_next_connection(ServiceContext* service_context, TirtcConn** out_connection) {
   std::lock_guard<std::mutex> guard(service_context->connections_lock);
   if (service_context->accepted_connections.empty()) {
@@ -93,6 +120,34 @@ bool is_transient_transport_send_error(TirtcError status) {
   return status == TIRTC_ERROR_TRANSPORT_INVALID_HANDLE || status == TIRTC_ERROR_TRANSPORT_BUSY ||
          status == TIRTC_ERROR_NOT_CONNECTED || status == TIRTC_ERROR_TRANSPORT_TIMEOUT ||
          status == TIRTC_ERROR_TRANSPORT_BACKEND_CONNECTION_OTHER_ERROR;
+}
+
+void emit_media_send_pacing_if_due(DriverContext* context, MediaSendPacingStats* stats,
+                                   std::chrono::steady_clock::time_point now, bool force) {
+  if (context == nullptr || stats == nullptr ||
+      stats->last_emit_at == decltype(stats->last_emit_at){}) {
+    return;
+  }
+  const auto elapsed = now - stats->last_emit_at;
+  if (!force && elapsed < kMediaSendPacingLogInterval) {
+    return;
+  }
+  if (stats->audio_packets == 0 && stats->video_packets == 0) {
+    return;
+  }
+  const auto window_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+  (void)emit_event(context, "info", "media", "media.send.pacing",
+                   "{\"window_ms\":" + std::to_string(window_ms) +
+                       ",\"audio_packet_count\":" + std::to_string(stats->audio_packets) +
+                       ",\"video_packet_count\":" + std::to_string(stats->video_packets) +
+                       ",\"audio_bytes\":" + std::to_string(stats->audio_bytes) +
+                       ",\"video_bytes\":" + std::to_string(stats->video_bytes) +
+                       ",\"max_target_late_us\":" + std::to_string(stats->max_target_late_us) +
+                       ",\"max_audio_submit_us\":" + std::to_string(stats->max_audio_submit_us) +
+                       ",\"max_video_submit_us\":" + std::to_string(stats->max_video_submit_us) +
+                       ",\"last_audio_pts_us\":" + std::to_string(stats->last_audio_pts_us) +
+                       ",\"last_video_pts_us\":" + std::to_string(stats->last_video_pts_us) + "}");
+  stats->reset(now);
 }
 
 void emit_session_first_audio(DriverContext* context, int session_index, int64_t pts_us,
@@ -563,12 +618,15 @@ bool run_send_role(DriverContext* context) {
   size_t video_packet_index = 0;
   int64_t cycle_offset_us = 0;
   auto media_started_at = std::chrono::steady_clock::now();
+  MediaSendPacingStats pacing_stats{};
+  pacing_stats.reset(media_started_at);
 
   auto reset_media_timeline = [&]() {
     audio_packet_index = 0;
     video_packet_index = 0;
     cycle_offset_us = 0;
     media_started_at = std::chrono::steady_clock::now();
+    pacing_stats.reset(media_started_at);
   };
 
   auto fail_media_send = [&](const std::string& reason_code, const std::string& event_kind,
@@ -721,6 +779,12 @@ bool run_send_role(DriverContext* context) {
     }
     drain_pending_command_echoes(context);
     (void)cleanup_finished_sessions(context, &inputs, &active_sessions);
+    const auto send_ready_at = std::chrono::steady_clock::now();
+    const int64_t target_late_us =
+        std::chrono::duration_cast<std::chrono::microseconds>(send_ready_at - target_time).count();
+    if (target_late_us > pacing_stats.max_target_late_us) {
+      pacing_stats.max_target_late_us = target_late_us;
+    }
     if (context->request.exit_after_first_session && accepted_any_session &&
         active_sessions.empty() && context->first_audio_packet_ms >= 0 &&
         context->first_video_packet_ms >= 0) {
@@ -760,8 +824,15 @@ bool run_send_role(DriverContext* context) {
       frame.pts_us = audio_pts_us;
       frame.data = payload.data();
       frame.data_bytes = payload.size();
+      const auto submit_started_at = std::chrono::steady_clock::now();
       const TirtcError submit_status =
           tirtc_audio_encoded_input_submit_frame(inputs.audio_input, &frame);
+      const int64_t submit_elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                                            std::chrono::steady_clock::now() - submit_started_at)
+                                            .count();
+      if (submit_elapsed_us > pacing_stats.max_audio_submit_us) {
+        pacing_stats.max_audio_submit_us = submit_elapsed_us;
+      }
       if (submit_status != TIRTC_ERROR_OK) {
         if (is_transient_transport_send_error(submit_status)) {
           audio_packet_index += 1;
@@ -772,6 +843,9 @@ bool run_send_role(DriverContext* context) {
       }
       context->audio_packet_count += 1;
       context->audio_bytes += payload.size();
+      pacing_stats.audio_packets += 1;
+      pacing_stats.audio_bytes += payload.size();
+      pacing_stats.last_audio_pts_us = audio_pts_us;
       for (const auto& session : active_sessions) {
         if (!session->sent_first_audio) {
           session->sent_first_audio = true;
@@ -796,8 +870,15 @@ bool run_send_role(DriverContext* context) {
       frame.is_key_frame = video_packet.is_key_frame ? 1 : 0;
       frame.data = payload.data();
       frame.data_bytes = payload.size();
+      const auto submit_started_at = std::chrono::steady_clock::now();
       const TirtcError submit_status =
           tirtc_video_encoded_input_submit_frame(inputs.video_input, &frame);
+      const int64_t submit_elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                                            std::chrono::steady_clock::now() - submit_started_at)
+                                            .count();
+      if (submit_elapsed_us > pacing_stats.max_video_submit_us) {
+        pacing_stats.max_video_submit_us = submit_elapsed_us;
+      }
       if (submit_status != TIRTC_ERROR_OK) {
         if (is_transient_transport_send_error(submit_status)) {
           video_packet_index += 1;
@@ -809,6 +890,9 @@ bool run_send_role(DriverContext* context) {
       std::string first_packet_event_id;
       context->video_packet_count += 1;
       context->video_bytes += payload.size();
+      pacing_stats.video_packets += 1;
+      pacing_stats.video_bytes += payload.size();
+      pacing_stats.last_video_pts_us = video_pts_us;
       if (video_packet.is_key_frame) {
         for (const auto& session : active_sessions) {
           if (!session->sent_first_video) {
@@ -829,7 +913,9 @@ bool run_send_role(DriverContext* context) {
         media_stage_finished = true;
       }
     }
+    emit_media_send_pacing_if_due(context, &pacing_stats, std::chrono::steady_clock::now(), false);
   }
+  emit_media_send_pacing_if_due(context, &pacing_stats, std::chrono::steady_clock::now(), true);
 
   if (!accepted_any_session &&
       (service_context.errors.load() != 0 || service_context.stopped.load() != 0)) {
