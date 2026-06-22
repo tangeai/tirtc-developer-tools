@@ -355,8 +355,10 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
     *out_reason = "audio_format_unsupported";
   } else if (!std::filesystem::exists(std::filesystem::path(context->runtime_root) / "include" /
                                       "tirtc" / "av.h") ||
-             !std::filesystem::exists(std::filesystem::path(context->runtime_root) / "lib" /
-                                      "libmatrix_runtime_facade.a")) {
+             (!std::filesystem::exists(std::filesystem::path(context->runtime_root) / "lib" /
+                                       "libtirtc_av.dylib") &&
+              !std::filesystem::exists(std::filesystem::path(context->runtime_root) / "lib" /
+                                       "libtirtc_av.so"))) {
     *out_reason = "runtime_bundle_missing";
   } else if ((context->request.role == "device" || context->request.role == "send") &&
              !context->asset_root.empty() &&

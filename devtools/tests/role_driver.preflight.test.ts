@@ -30,7 +30,7 @@ function makeRuntimeRoot(root: string): string {
   fs.mkdirSync(path.join(runtimeRoot, 'include', 'tirtc'), {recursive: true});
   fs.mkdirSync(path.join(runtimeRoot, 'lib'), {recursive: true});
   fs.writeFileSync(path.join(runtimeRoot, 'include', 'tirtc', 'av.h'), '/* test */\n');
-  fs.writeFileSync(path.join(runtimeRoot, 'lib', 'libmatrix_runtime_facade.a'), '');
+  fs.writeFileSync(path.join(runtimeRoot, 'lib', 'libtirtc_av.so'), '');
   return runtimeRoot;
 }
 

@@ -247,9 +247,13 @@ function resolveDriverPath(roots: RoleDriverRoots, platform: string): string {
   return candidates[0] ?? '';
 }
 
-function hasRuntimeBundle(runtimeRoot: string): boolean {
+function runtimeDirectLibraryName(platform: string): string {
+  return platform === 'macos-arm64' ? 'libtirtc_av.dylib' : 'libtirtc_av.so';
+}
+
+function hasRuntimeBundle(runtimeRoot: string, platform: string): boolean {
   return pathExists(path.join(runtimeRoot, 'include/tirtc/av.h')) &&
-    pathExists(path.join(runtimeRoot, 'lib/libmatrix_runtime_facade.a'));
+    pathExists(path.join(runtimeRoot, 'lib', runtimeDirectLibraryName(platform)));
 }
 
 function requiredAdjacentDriverDependency(platform: string): string | undefined {
@@ -279,7 +283,7 @@ function resolveRuntimeRoot(roots: RoleDriverRoots, platform: string): string {
   );
   candidates.push(path.join(roots.packageRoot, 'vendor/runtime', platform));
   for (const candidate of candidates) {
-    if (hasRuntimeBundle(candidate)) {
+    if (hasRuntimeBundle(candidate, platform)) {
       return candidate;
     }
   }
@@ -754,7 +758,7 @@ async function runDriver(
       throw rolePreflightError('driver_dependency_missing', dependencyPath);
     }
   }
-  if (!hasRuntimeBundle(runtimeRoot)) {
+  if (!hasRuntimeBundle(runtimeRoot, platform)) {
     throw rolePreflightError('runtime_bundle_missing', runtimeRoot);
   }
   if (!pathExists(path.join(assetRoot, 'manifest.json'))) {

@@ -52,7 +52,6 @@ RUNTIME_ROOT_RAW="$(resolve_runtime_root)"
 RUNTIME_ROOT="$(cd "$RUNTIME_ROOT_RAW" && pwd)"
 RUNTIME_INCLUDE_DIR="$RUNTIME_ROOT/include"
 RUNTIME_LIB_DIR="$RUNTIME_ROOT/lib"
-FFMPEG_STATIC_DIR="$RUNTIME_LIB_DIR"
 OUTPUT_DIR="${TIRTC_DEVTOOLS_DRIVER_OUTPUT_DIR:-$DEVTOOLS_ROOT/.build/driver/bin/$PLATFORM}"
 OUTPUT="$OUTPUT_DIR/devtools_driver_probe"
 
@@ -60,38 +59,16 @@ required=(
   "$RUNTIME_INCLUDE_DIR/tirtc/audio.h"
   "$RUNTIME_INCLUDE_DIR/tirtc/av.h"
   "$RUNTIME_INCLUDE_DIR/tirtc/video_io.h"
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_facade.a"
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_transport.a"
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_media.a"
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_audio.a"
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_video.a"
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_foundation_logging.a"
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_foundation_http.a"
-  "$RUNTIME_LIB_DIR/libwebrtc_apm.a"
-  "$RUNTIME_LIB_DIR/libxlog.a"
-  "$RUNTIME_LIB_DIR/libTiRTC.a"
-  "$RUNTIME_LIB_DIR/libmbedtls.a"
-  "$RUNTIME_LIB_DIR/libmbedx509.a"
-  "$RUNTIME_LIB_DIR/libmbedcrypto.a"
-  "$FFMPEG_STATIC_DIR/libavcodec.a"
-  "$FFMPEG_STATIC_DIR/libavutil.a"
-  "$FFMPEG_STATIC_DIR/libswscale.a"
-  "$FFMPEG_STATIC_DIR/libswresample.a"
-  "$FFMPEG_STATIC_DIR/libavformat.a"
-  "$FFMPEG_STATIC_DIR/libavfilter.a"
-  "$FFMPEG_STATIC_DIR/libopencore-amrnb.a"
-  "$FFMPEG_STATIC_DIR/libx264.a"
 )
 
 if [[ "$PLATFORM" == "macos-arm64" ]]; then
   required+=(
+    "$RUNTIME_LIB_DIR/libtirtc_av.dylib"
     "$RUNTIME_LIB_DIR/libtgrtc.dylib"
-    "$RUNTIME_LIB_DIR/libTGTRP.a"
   )
 else
   required+=(
-    "$RUNTIME_LIB_DIR/libwebrtc.a"
-    "$RUNTIME_LIB_DIR/libusrsctp.a"
+    "$RUNTIME_LIB_DIR/libtirtc_av.so"
   )
 fi
 
@@ -161,47 +138,6 @@ sources=(
   "$DRIVER_ROOT/src/devtools_driver_probe_main.cc"
 )
 
-runtime_libs=(
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_facade.a" \
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_transport.a" \
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_media.a" \
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_audio.a" \
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_video.a" \
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_foundation_logging.a" \
-  "$RUNTIME_LIB_DIR/libmatrix_runtime_foundation_http.a" \
-  "$RUNTIME_LIB_DIR/libwebrtc_apm.a" \
-  "$RUNTIME_LIB_DIR/libxlog.a" \
-  "$RUNTIME_LIB_DIR/libTiRTC.a"
-)
-if [[ -f "$RUNTIME_LIB_DIR/libmatrix_runtime_credential.a" ]]; then
-  runtime_libs+=("$RUNTIME_LIB_DIR/libmatrix_runtime_credential.a")
-fi
-runtime_libs+=(
-  "$RUNTIME_LIB_DIR/libmbedtls.a" \
-  "$RUNTIME_LIB_DIR/libmbedx509.a" \
-  "$RUNTIME_LIB_DIR/libmbedcrypto.a"
-)
-if [[ "$PLATFORM" == "linux-x64" ]]; then
-  runtime_libs+=(
-    "$RUNTIME_LIB_DIR/libwebrtc.a" \
-    "$RUNTIME_LIB_DIR/libusrsctp.a"
-  )
-fi
-
-ffmpeg_libs=(
-  "$FFMPEG_STATIC_DIR/libavcodec.a" \
-  "$FFMPEG_STATIC_DIR/libavutil.a" \
-  "$FFMPEG_STATIC_DIR/libswscale.a" \
-  "$FFMPEG_STATIC_DIR/libswresample.a" \
-  "$FFMPEG_STATIC_DIR/libavformat.a" \
-  "$FFMPEG_STATIC_DIR/libavfilter.a" \
-  "$FFMPEG_STATIC_DIR/libopencore-amrnb.a" \
-  "$FFMPEG_STATIC_DIR/libx264.a"
-)
-if [[ -f "$FFMPEG_STATIC_DIR/libpostproc.a" ]]; then
-  ffmpeg_libs+=("$FFMPEG_STATIC_DIR/libpostproc.a")
-fi
-
 if [[ "$PLATFORM" == "macos-arm64" ]]; then
   c++ \
     -std=c++17 \
@@ -209,23 +145,9 @@ if [[ "$PLATFORM" == "macos-arm64" ]]; then
     -I "$RUNTIME_INCLUDE_DIR" \
     "${sources[@]}" \
     -o "$OUTPUT" \
-    "${runtime_libs[@]}" \
-    "$RUNTIME_LIB_DIR/libTGTRP.a" \
-    "${ffmpeg_libs[@]}" \
-    -framework AudioToolbox \
-    -framework Foundation \
-    -framework CoreFoundation \
-    -framework CoreMedia \
-    -framework CoreVideo \
-    -framework VideoToolbox \
-    -framework CoreGraphics \
-    -framework AppKit \
-    -framework Security \
-    -lobjc \
-    -lz \
-    -lpthread \
-    -lm
-  ln -sf "$RUNTIME_LIB_DIR/libtgrtc.dylib" "$OUTPUT_DIR/libtgrtc.dylib"
+    -L "$RUNTIME_LIB_DIR" \
+    -Wl,-rpath,@loader_path \
+    -ltirtc_av
 else
   "${CXX:-g++}" \
     -std=c++17 \
@@ -233,14 +155,12 @@ else
     -I "$RUNTIME_INCLUDE_DIR" \
     "${sources[@]}" \
     -o "$OUTPUT" \
-    -Wl,--start-group \
-    "${runtime_libs[@]}" \
-    "${ffmpeg_libs[@]}" \
-    -Wl,--end-group \
-    -ldl \
-    -lpthread \
-    -lm \
-    -lz
+    -L "$RUNTIME_LIB_DIR" \
+    -Wl,-rpath,'$ORIGIN' \
+    -ltirtc_av
 fi
+
+find "$RUNTIME_LIB_DIR" -maxdepth 1 -type f \( -name '*.dylib' -o -name '*.so' \) \
+  -exec cp {} "$OUTPUT_DIR/" \;
 
 echo "$OUTPUT"

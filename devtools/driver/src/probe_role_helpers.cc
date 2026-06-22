@@ -375,21 +375,21 @@ void cleanup_receive(TirtcConn* connection, TirtcAudioOutput* audio_output,
   }
   if (audio_output != nullptr) {
     (void)tirtc_audio_output_set_observer(audio_output, nullptr, nullptr);
+    (void)tirtc_audio_output_detach(audio_output);
   }
   if (video_output != nullptr) {
     (void)tirtc_video_output_set_observer(video_output, nullptr, nullptr);
+    (void)tirtc_video_output_detach(video_output);
+    (void)tirtc_video_output_detach_view(video_output);
   }
   if (connection != nullptr) {
     (void)tirtc_conn_disconnect(connection);
     tirtc_conn_destroy(connection);
   }
   if (audio_output != nullptr) {
-    (void)tirtc_audio_output_detach(audio_output);
     tirtc_audio_output_destroy(audio_output);
   }
   if (video_output != nullptr) {
-    (void)tirtc_video_output_detach(video_output);
-    (void)tirtc_video_output_detach_view(video_output);
     tirtc_video_output_destroy(video_output);
   }
   if (aout != nullptr) {

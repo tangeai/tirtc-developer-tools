@@ -642,11 +642,11 @@ bool run_send_role(DriverContext* context) {
       finish_stage(context, "media_send", StageResult::Failed, reason_code, event_id);
     }
     inputs.stop();
-    (void)tirtc_conn_service_stop(service);
     cleanup_active_sessions(context, &inputs, &active_sessions, reason_code, track,
                             submit_error_status);
     inputs.cleanup();
     cleanup_pending_connections(&service_context);
+    (void)tirtc_conn_service_stop(service);
     (void)upload_logs_on_failure(context);
     tirtc_uninit();
     return false;
