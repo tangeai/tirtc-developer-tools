@@ -117,6 +117,7 @@ function runAndExit(promise: Promise<number>): void {
 
 program.name('tirtc-devtools-cli')
     .description('TiRTC DevTools CLI')
+    .option('--version', 'display version')
     .option('--json', '以机器可读 JSON 输出（便于脚本集成）');
 
 registerTokenCommands(program, getCliOptions, runAndExit);
@@ -147,6 +148,7 @@ device.command('start')
     .option('--audio-codec <codec>', 'pcm|g711a|aac|opus|amr', 'g711a')
     .option('--audio-sample-rate <hz>', '8000|16000', '8000')
     .option('--audio-channels <count>', '1|2', '1')
+    .option('--receive-audio-stream-id <id>', '接收 Flutter 本地音频传输的 stream id', '14')
     .option('--exit-after-first-session', '首个 client 会话完成后主动正常退出并写出 summary')
     .option('--duration-ms <ms>', '可选自动结束时长；默认持续运行直到用户结束进程')
     .option('--connect-timeout-ms <ms>', 'service ready 最大等待')

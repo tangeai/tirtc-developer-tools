@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import * as ffmpegTool from '../src/ffmpeg_tool';
 import {runClientStart, runDeviceStart} from '../src/role_driver';
 
 type JsonEnvelope = {
@@ -21,6 +22,19 @@ type JsonEnvelope = {
       log_id?: string;
       reason_code?: string;
       error_code?: number;
+    };
+    received_audio?: {
+      enabled?: boolean;
+      stream_id?: number;
+      codec?: string;
+      sample_rate_hz?: number;
+      channels?: number;
+      captured_bytes?: number;
+      pcm_path?: string;
+      metadata_path?: string;
+      mp3_path?: string | null;
+      mp3_status?: string;
+      mp3_reason_code?: string | null;
     };
   };
 };
@@ -77,6 +91,36 @@ exit ${exitCode}
   return driverPath;
 }
 
+function makeReceivedAudioPcmSummaryDriver(root: string, summaryJson: string, exitCode: number): string {
+  const driverPath = path.join(root, 'devtools_driver_probe');
+  fs.writeFileSync(
+    driverPath,
+    `#!/bin/sh
+set -eu
+artifact_root=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --artifact-root)
+      artifact_root="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+mkdir -p "$artifact_root"
+printf 'tirtc-pcm' > "$artifact_root/received-audio.pcm"
+cat > "$artifact_root/summary.json" <<'JSON'
+${summaryJson}
+JSON
+exit ${exitCode}
+`,
+  );
+  fs.chmodSync(driverPath, 0o755);
+  return driverPath;
+}
+
 function makeLiveSummaryDriver(root: string): string {
   const driverPath = path.join(root, 'devtools_driver_probe');
   fs.writeFileSync(
@@ -116,6 +160,22 @@ cat > "$artifact_root/summary.json" <<'JSON'
   "stage_status": {
     "connect": {"status": "passed"},
     "media_send": {"status": "passed"}
+  },
+  "received_audio": {
+    "enabled": true,
+    "stream_id": 14,
+    "codec": "g711a",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "bits_per_sample": 16,
+    "sample_format": "s16le",
+    "first_output_timing_ms": 120,
+    "captured_bytes": 4096,
+    "pcm_path": "received-audio.pcm",
+    "metadata_path": "received-audio.metadata.json",
+    "mp3_path": "received-audio-20260624-120000.mp3",
+    "mp3_status": "generated",
+    "mp3_reason_code": "ok"
   },
   "stream_message": {
     "enabled": true,
@@ -303,6 +363,68 @@ describe('role driver preflight failures', () => {
       fs.readFileSync(path.join(artifactRoot, 'request.redacted.json'), 'utf8'),
     ) as {media: {audio: {codec: string; sample_rate_hz: number; channels: number}}};
     expect(request.media.audio).toEqual({codec: 'opus', sample_rate_hz: 16000, channels: 2});
+  });
+
+  it('adds receive audio stream id to device request preflight', async () => {
+    process.env.TIRTC_DEVICE_ID = 'server-device-id';
+    process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
+    process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeDriver(tempRoot);
+    process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
+    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+
+    const artifactRoot = path.join(tempRoot, 'device-receive-audio-stream');
+    await expect(runDeviceStart({
+      artifactRoot,
+      source: makeAssetRoot(tempRoot),
+      receiveAudioStreamId: '17',
+    }, {json: true})).resolves.toBe(1);
+
+    const request = JSON.parse(
+      fs.readFileSync(path.join(artifactRoot, 'request.redacted.json'), 'utf8'),
+    ) as {media: {receive_audio?: {enabled?: boolean; stream_id?: number}}};
+    expect(request.media.receive_audio).toEqual({enabled: true, stream_id: 17});
+  });
+
+  it('rejects invalid receive audio stream id during config', async () => {
+    process.env.TIRTC_DEVICE_ID = 'server-device-id';
+    process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
+
+    await expect(runDeviceStart({
+      artifactRoot: path.join(tempRoot, 'device-invalid-receive-audio-stream'),
+      source: makeAssetRoot(tempRoot),
+      receiveAudioStreamId: '0',
+    }, {json: true})).resolves.toBe(2);
+
+    const envelope = lastEnvelope();
+    expect(envelope.message).toContain('--receive-audio-stream-id must be a positive integer');
+    expect(envelope.data).toMatchObject({
+      status: 'failed',
+      exit_code: 2,
+      role: 'device',
+      reason_code: 'invalid_request',
+      failed_stage: 'config',
+    });
+  });
+
+  it('rejects out-of-range receive audio stream id during config', async () => {
+    process.env.TIRTC_DEVICE_ID = 'server-device-id';
+    process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
+
+    await expect(runDeviceStart({
+      artifactRoot: path.join(tempRoot, 'device-out-of-range-receive-audio-stream'),
+      source: makeAssetRoot(tempRoot),
+      receiveAudioStreamId: '256',
+    }, {json: true})).resolves.toBe(2);
+
+    const envelope = lastEnvelope();
+    expect(envelope.message).toContain('--receive-audio-stream-id must be <= 255');
+    expect(envelope.data).toMatchObject({
+      status: 'failed',
+      exit_code: 2,
+      role: 'device',
+      reason_code: 'invalid_request',
+      failed_stage: 'config',
+    });
   });
 
   it('reports unsupported audio codec with a specific reason code', async () => {
@@ -632,6 +754,19 @@ describe('role driver preflight failures', () => {
         role: 'device',
         artifact_root: artifactRoot,
         summary_path: path.join(artifactRoot, 'summary.json'),
+        received_audio: {
+          enabled: true,
+          stream_id: 14,
+          codec: 'g711a',
+          sample_rate_hz: 16000,
+          channels: 1,
+          captured_bytes: 4096,
+          pcm_path: 'received-audio.pcm',
+          metadata_path: 'received-audio.metadata.json',
+          mp3_path: 'received-audio-20260624-120000.mp3',
+          mp3_status: 'generated',
+          mp3_reason_code: 'ok',
+        },
         stream_message: {
           enabled: true,
           pairing_id: 'live-log-test',
@@ -651,5 +786,80 @@ describe('role driver preflight failures', () => {
     expect(stderr).toContain('[device] driver finished status=completed exit_code=0 reason_code=ok');
     expect(stderr).toContain('[device] process exited code=0 signal=none');
     expect(stderr).not.toContain('device-secret');
+  });
+
+  it('marks received audio mp3 generation as ffmpeg_failed when ffmpeg exits non-zero', async () => {
+    const fakeToolDir = path.join(tempRoot, 'fake-ffmpeg-bin');
+    fs.mkdirSync(fakeToolDir, {recursive: true});
+    const fakeFfmpeg = path.join(fakeToolDir, 'ffmpeg');
+    const fakeFfprobe = path.join(fakeToolDir, 'ffprobe');
+    fs.writeFileSync(fakeFfmpeg, '#!/bin/sh\nexit 42\n');
+    fs.writeFileSync(fakeFfprobe, '#!/bin/sh\nexit 0\n');
+    fs.chmodSync(fakeFfmpeg, 0o755);
+    fs.chmodSync(fakeFfprobe, 0o755);
+    const ffmpegSpy = jest.spyOn(ffmpegTool, 'ensureFfmpegTools').mockReturnValue({
+      ffmpeg: fakeFfmpeg,
+      ffprobe: fakeFfprobe,
+    });
+
+    const artifactRoot = path.join(tempRoot, 'device-received-audio-ffmpeg-failed');
+    const driverPath = makeReceivedAudioPcmSummaryDriver(tempRoot, `{
+  "schema_version": 1,
+  "execution_id": "ffmpeg-failed-test",
+  "driver_version": "fake",
+  "runtime_version": "fake",
+  "role": "device",
+  "status": "completed",
+  "exit_code": 0,
+  "received_audio": {
+    "enabled": true,
+    "stream_id": 14,
+    "codec": "g711a",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "bits_per_sample": 16,
+    "sample_format": "s16le",
+    "first_output_timing_ms": 120,
+    "captured_bytes": 9,
+    "pcm_path": "received-audio.pcm",
+    "metadata_path": "received-audio.metadata.json",
+    "mp3_path": null,
+    "mp3_status": "skipped",
+    "mp3_reason_code": "ffmpeg_unavailable"
+  },
+  "artifact_paths": {
+    "summary": "summary.json"
+  }
+}`, 0);
+    process.env.TIRTC_DEVTOOLS_DRIVER_PATH = driverPath;
+    process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
+    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    process.env.TIRTC_DEVICE_ID = 'server-device-id';
+    process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
+
+    try {
+      await expect(runDeviceStart({
+        artifactRoot,
+        source: makeAssetRoot(tempRoot),
+      }, {json: true})).resolves.toBe(0);
+
+      const envelope = lastEnvelope();
+      expect(envelope.data.received_audio).toMatchObject({
+        enabled: true,
+        captured_bytes: 9,
+        mp3_path: null,
+        mp3_status: 'failed',
+        mp3_reason_code: 'ffmpeg_failed',
+      });
+      const metadata = JSON.parse(
+        fs.readFileSync(path.join(artifactRoot, 'received-audio.metadata.json'), 'utf8'),
+      ) as {mp3_status?: string; mp3_reason_code?: string};
+      expect(metadata).toMatchObject({
+        mp3_status: 'failed',
+        mp3_reason_code: 'ffmpeg_failed',
+      });
+    } finally {
+      ffmpegSpy.mockRestore();
+    }
   });
 });

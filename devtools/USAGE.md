@@ -106,10 +106,43 @@ export TIRTC_ENDPOINT="<TIRTC_ENDPOINT>"
 tirtc-devtools-cli --json device start \
   --source .build/tirtc-assets/manifest.json \
   --video-codec h264 \
+  --receive-audio-stream-id 14 \
   --artifact-root .build/devtools-cli/device-h264
 ```
 
 默认持续运行。自动化场景可以传 `--duration-ms <ms>`。
+
+常用媒体参数：
+
+- `--audio-codec <codec>`：设备端下发音频格式，支持 `g711a`、`aac`、`pcm`、`opus`、`amr`。`amr` 只支持 8 kHz mono。
+- `--audio-sample-rate <hz>`：设备端下发音频采样率，支持 `8000`、`16000`。
+- `--audio-channels <count>`：设备端下发音频声道数，支持 `1`、`2`；`amr` 只支持 `1`。
+- `--receive-audio-stream-id <id>`：device 侧接收 Flutter 本地音频采集与传输的 stream id，默认 `14`。非法值会在配置阶段失败，`reason_code` 为 `invalid_request`。
+
+当 Flutter 本地音频发送到 `--receive-audio-stream-id` 指定的 stream 后，device summary 会包含 `received_audio`：
+
+```json
+{
+  "received_audio": {
+    "enabled": true,
+    "stream_id": 14,
+    "codec": "g711a",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "bits_per_sample": 16,
+    "sample_format": "s16le",
+    "first_output_timing_ms": 120,
+    "captured_bytes": 4096,
+    "pcm_path": "received-audio.pcm",
+    "metadata_path": "received-audio.metadata.json",
+    "mp3_path": "received-audio-20260624-120000.mp3",
+    "mp3_status": "generated",
+    "mp3_reason_code": "ok"
+  }
+}
+```
+
+`received-audio.pcm` 来自 runtime public facade 的 `TirtcAudioOutput + headless TirtcAudioAout` render PCM。`received-audio.metadata.json` 与 summary 中的 `received_audio` 保持同字段合同，并补充 artifact root 与开始 / 结束时间。CLI 会在 PCM 和格式信息完整时调用 FFmpeg 派生 MP3；缺 FFmpeg 时记录 `mp3_status = "skipped"`、`mp3_reason_code = "ffmpeg_unavailable"`，FFmpeg 转码失败时记录 `mp3_status = "failed"`、`mp3_reason_code = "ffmpeg_failed"`。
 
 如果要生成本机 client 使用的 `bootstrap.json`，先准备 client token：
 

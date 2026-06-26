@@ -25,6 +25,7 @@ constexpr auto kStreamMessageRetryDelay = std::chrono::milliseconds(250);
 constexpr auto kMediaSendPacingLogInterval = std::chrono::seconds(1);
 constexpr int kStreamMessageMinPeriodMs = 8000;
 constexpr int kStreamMessageMaxPeriodMs = 12000;
+constexpr uint32_t kReceivedAudioCaptureMaxBytes = 64 * 1024;
 
 struct SendInputLifecycle {
   TirtcAudioEncodedInput* audio_input = nullptr;
@@ -58,11 +59,16 @@ struct SendInputLifecycle {
 
 struct ActiveSendSession {
   TirtcConn* connection = nullptr;
+  TirtcAudioOutput* receive_audio_output = nullptr;
+  TirtcAudioAout* receive_audio_aout = nullptr;
   ConnectionEvents events;
   ConnCallbackContext callback_context;
+  OutputEvents receive_audio_events;
+  AudioCaptureContext receive_audio_context;
   int session_index = 0;
   bool audio_attached = false;
   bool video_attached = false;
+  bool receive_audio_attached = false;
   bool sent_first_audio = false;
   bool sent_first_video = false;
   bool sent_first_stream_message = false;
@@ -120,6 +126,159 @@ bool is_transient_transport_send_error(TirtcError status) {
   return status == TIRTC_ERROR_TRANSPORT_INVALID_HANDLE || status == TIRTC_ERROR_TRANSPORT_BUSY ||
          status == TIRTC_ERROR_NOT_CONNECTED || status == TIRTC_ERROR_TRANSPORT_TIMEOUT ||
          status == TIRTC_ERROR_TRANSPORT_BACKEND_CONNECTION_OTHER_ERROR;
+}
+
+std::string audio_codec_label_for_runtime_codec(TirtcMediaCodec codec) {
+  switch (codec) {
+    case TIRTC_MEDIA_CODEC_AUDIO_AAC:
+      return "aac";
+    case TIRTC_MEDIA_CODEC_AUDIO_G711A:
+      return "g711a";
+    case TIRTC_MEDIA_CODEC_AUDIO_PCM:
+      return "pcm";
+    default:
+      return "pcm";
+  }
+}
+
+void cleanup_session_receive_audio(ActiveSendSession* session) {
+  if (session == nullptr) {
+    return;
+  }
+  if (session->receive_audio_output != nullptr) {
+    (void)tirtc_audio_output_set_observer(session->receive_audio_output, nullptr, nullptr);
+    (void)tirtc_audio_output_detach(session->receive_audio_output);
+    session->receive_audio_attached = false;
+  }
+  if (session->receive_audio_output != nullptr) {
+    tirtc_audio_output_destroy(session->receive_audio_output);
+    session->receive_audio_output = nullptr;
+  }
+  if (session->receive_audio_aout != nullptr) {
+    tirtc_audio_aout_destroy(session->receive_audio_aout);
+    session->receive_audio_aout = nullptr;
+  }
+}
+
+bool start_receive_audio_capture_for_session(DriverContext* context, ActiveSendSession* session,
+                                             std::string* reason_code, std::string* event_kind) {
+  if (context == nullptr || session == nullptr || !context->request.receive_audio_enabled) {
+    return true;
+  }
+  if (context->received_audio_observed || session->receive_audio_attached) {
+    return true;
+  }
+  if (session->connection == nullptr) {
+    *reason_code = "output_sink_unavailable";
+    *event_kind = "output.audio_receive.failed";
+    return false;
+  }
+
+  context->received_audio_enabled = true;
+  context->received_audio_pcm_path = "received-audio.pcm";
+  context->received_audio_metadata_path = "received-audio.metadata.json";
+  context->received_audio_mp3_status = "skipped";
+  context->received_audio_mp3_reason_code = "pcm_missing";
+  const std::filesystem::path marker_path =
+      context->artifact_root / "received-audio.first-output.json";
+  const std::filesystem::path pcm_path = context->artifact_root / context->received_audio_pcm_path;
+  session->receive_audio_context.marker_path = marker_path;
+  session->receive_audio_context.pcm_path = pcm_path;
+  std::error_code file_error;
+  std::filesystem::remove(marker_path, file_error);
+  file_error.clear();
+  std::filesystem::remove(pcm_path, file_error);
+
+  const std::string marker_path_string = marker_path.string();
+  const std::string pcm_path_string = pcm_path.string();
+  TirtcAudioHeadlessAoutOptions aout_options{};
+  aout_options.first_output_json_path = marker_path_string.c_str();
+  aout_options.pcm_path = pcm_path_string.c_str();
+  aout_options.max_capture_bytes = kReceivedAudioCaptureMaxBytes;
+  TirtcAudioOutputObserver audio_output_observer{};
+  audio_output_observer.on_state_changed = on_audio_output_state_changed;
+  audio_output_observer.on_error = on_audio_output_error;
+
+  if (tirtc_audio_output_create(&session->receive_audio_output) != TIRTC_ERROR_OK ||
+      session->receive_audio_output == nullptr ||
+      tirtc_audio_output_set_observer(session->receive_audio_output, &audio_output_observer,
+                                      &session->receive_audio_events) != TIRTC_ERROR_OK ||
+      tirtc_audio_aout_create_headless_capture(&aout_options, &session->receive_audio_aout) !=
+          TIRTC_ERROR_OK ||
+      session->receive_audio_aout == nullptr ||
+      tirtc_audio_output_set_aout(session->receive_audio_output, session->receive_audio_aout) !=
+          TIRTC_ERROR_OK ||
+      tirtc_audio_output_attach(session->receive_audio_output, session->connection,
+                                static_cast<uint8_t>(context->request.receive_audio_stream_id)) !=
+          TIRTC_ERROR_OK) {
+    *reason_code = "output_sink_unavailable";
+    *event_kind = "output.audio_receive.failed";
+    cleanup_session_receive_audio(session);
+    return false;
+  }
+
+  session->receive_audio_attached = true;
+  (void)emit_event(
+      context, "info", "output", "output.audio_receive.start",
+      "{\"session_index\":" + std::to_string(session->session_index) +
+          ",\"stream_id\":" + std::to_string(context->request.receive_audio_stream_id) +
+          ",\"pcm_path\":\"" + json_escape(context->received_audio_pcm_path) +
+          "\",\"metadata_path\":\"" + json_escape(context->received_audio_metadata_path) + "\"}");
+  return true;
+}
+
+void record_received_audio_if_ready(DriverContext* context, ActiveSendSession* session) {
+  if (context == nullptr || session == nullptr || !context->request.receive_audio_enabled ||
+      context->received_audio_observed || !session->receive_audio_attached ||
+      session->receive_audio_output == nullptr) {
+    return;
+  }
+  if (!load_headless_audio_capture(&session->receive_audio_context)) {
+    return;
+  }
+  TirtcAudioOutputDebugSnapshot snapshot{};
+  if (tirtc_audio_output_get_debug_snapshot(session->receive_audio_output, &snapshot) !=
+      TIRTC_ERROR_OK) {
+    return;
+  }
+  context->received_audio_enabled = true;
+  context->received_audio_observed = true;
+  context->received_audio_codec = audio_codec_label_for_runtime_codec(snapshot.codec);
+  context->received_audio_sample_rate_hz = snapshot.sample_rate_hz == 0
+                                               ? session->receive_audio_context.sample_rate_hz
+                                               : snapshot.sample_rate_hz;
+  context->received_audio_channels =
+      snapshot.channels == 0 ? session->receive_audio_context.channels : snapshot.channels;
+  context->received_audio_captured_bytes = session->receive_audio_context.captured_bytes;
+  context->received_audio_first_output_timing_ms = session->receive_audio_context.first_output_ms;
+  context->received_audio_mp3_status = "skipped";
+  context->received_audio_mp3_reason_code =
+      context->received_audio_captured_bytes > 0 ? "ffmpeg_unavailable" : "pcm_missing";
+  (void)emit_event(
+      context, "info", "output", "output.received_audio.first_output",
+      "{\"session_index\":" + std::to_string(session->session_index) +
+          ",\"stream_id\":" + std::to_string(context->request.receive_audio_stream_id) +
+          ",\"codec\":\"" + json_escape(context->received_audio_codec) +
+          "\",\"sample_rate_hz\":" + std::to_string(context->received_audio_sample_rate_hz) +
+          ",\"channels\":" + std::to_string(context->received_audio_channels) +
+          ",\"captured_bytes\":" + std::to_string(context->received_audio_captured_bytes) +
+          ",\"first_output_timing_ms\":" +
+          std::to_string(context->received_audio_first_output_timing_ms) + ",\"pcm_path\":\"" +
+          json_escape(context->received_audio_pcm_path) + "\"}");
+}
+
+void record_received_audio_for_active_sessions(
+    DriverContext* context,
+    const std::vector<std::unique_ptr<ActiveSendSession>>& active_sessions) {
+  if (context == nullptr || context->received_audio_observed) {
+    return;
+  }
+  for (const auto& session : active_sessions) {
+    record_received_audio_if_ready(context, session.get());
+    if (context->received_audio_observed) {
+      return;
+    }
+  }
 }
 
 void emit_media_send_pacing_if_due(DriverContext* context, MediaSendPacingStats* stats,
@@ -225,6 +384,8 @@ void cleanup_active_session(DriverContext* context, SendInputLifecycle* inputs,
     (void)tirtc_audio_encoded_input_detach(inputs->audio_input, session->connection);
     session->audio_attached = false;
   }
+  record_received_audio_if_ready(context, session);
+  cleanup_session_receive_audio(session);
   if (session->connection != nullptr) {
     (void)tirtc_conn_set_callbacks(session->connection, nullptr, nullptr);
   }
@@ -498,6 +659,11 @@ bool fail_send_role(DriverContext* context, TirtcConnService* service, const std
 }  // namespace
 
 bool run_send_role(DriverContext* context) {
+  context->received_audio_enabled = context->request.receive_audio_enabled;
+  if (context->request.receive_audio_enabled) {
+    context->received_audio_mp3_status = "skipped";
+    context->received_audio_mp3_reason_code = "pcm_missing";
+  }
   start_stage(context, "endpoint");
   const std::string log_root_dir = (context->artifact_root / "runtime-log").string();
   TirtcInitOptions init_options{};
@@ -707,7 +873,12 @@ bool run_send_role(DriverContext* context) {
                                        &reason_code, &event_kind)) {
         return fail_media_send(reason_code, event_kind, "", static_cast<int>(TIRTC_ERROR_OK));
       }
+      if (!start_receive_audio_capture_for_session(context, active_sessions.back().get(),
+                                                   &reason_code, &event_kind)) {
+        return fail_media_send(reason_code, event_kind, "", static_cast<int>(TIRTC_ERROR_OK));
+      }
       drain_pending_command_echoes(context);
+      record_received_audio_for_active_sessions(context, active_sessions);
       accepted_any_session = true;
     }
     return true;
@@ -720,6 +891,7 @@ bool run_send_role(DriverContext* context) {
       return false;
     }
     drain_pending_command_echoes(context);
+    record_received_audio_for_active_sessions(context, active_sessions);
     (void)cleanup_finished_sessions(context, &inputs, &active_sessions);
 
     if (context->request.exit_after_first_session && accepted_any_session &&
@@ -766,6 +938,7 @@ bool run_send_role(DriverContext* context) {
         return false;
       }
       drain_pending_command_echoes(context);
+      record_received_audio_for_active_sessions(context, active_sessions);
       (void)cleanup_finished_sessions(context, &inputs, &active_sessions);
       std::this_thread::sleep_until(
           std::min(target_time, std::chrono::steady_clock::now() + kConnectionPollInterval));
@@ -778,6 +951,7 @@ bool run_send_role(DriverContext* context) {
       return false;
     }
     drain_pending_command_echoes(context);
+    record_received_audio_for_active_sessions(context, active_sessions);
     (void)cleanup_finished_sessions(context, &inputs, &active_sessions);
     const auto send_ready_at = std::chrono::steady_clock::now();
     const int64_t target_late_us =
@@ -943,6 +1117,7 @@ bool run_send_role(DriverContext* context) {
                  ? "device_deadline"
                  : "service_stopped");
   drain_pending_command_echoes(context);
+  record_received_audio_for_active_sessions(context, active_sessions);
   inputs.stop();
   (void)emit_event(
       context, "info", "media", "media.audio_send.summary",
@@ -966,6 +1141,16 @@ bool run_send_role(DriverContext* context) {
           ",\"video_bytes\":" + std::to_string(context->video_bytes) +
           ",\"first_video_packet_ms\":" + std::to_string(context->first_video_packet_ms) +
           ",\"status\":\"" + (context->video_packet_count > 0 ? "passed" : "failed") + "\"}");
+  if (context->request.receive_audio_enabled) {
+    (void)emit_event(
+        context, "info", "output", "output.received_audio.summary",
+        "{\"stream_id\":" + std::to_string(context->request.receive_audio_stream_id) +
+            ",\"captured_bytes\":" + std::to_string(context->received_audio_captured_bytes) +
+            ",\"first_output_timing_ms\":" +
+            std::to_string(context->received_audio_first_output_timing_ms) + ",\"mp3_status\":\"" +
+            json_escape(context->received_audio_mp3_status) + "\",\"mp3_reason_code\":\"" +
+            json_escape(context->received_audio_mp3_reason_code) + "\"}");
+  }
   (void)tirtc_conn_service_stop(service);
   cleanup_active_sessions(context, &inputs, &active_sessions, exit_reason);
   inputs.cleanup();

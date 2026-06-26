@@ -279,6 +279,10 @@ RoleRequest parse_request(const std::string& request_json) {
       get_path_int(request_json, {"streams", "audio_stream_id"}, kDefaultAudioStreamId));
   request.video_stream_id = static_cast<uint8_t>(
       get_path_int(request_json, {"streams", "video_stream_id"}, kDefaultVideoStreamId));
+  request.receive_audio_enabled =
+      get_path_bool(request_json, {"media", "receive_audio", "enabled"}, false);
+  request.receive_audio_stream_id = get_path_int(
+      request_json, {"media", "receive_audio", "stream_id"}, kDefaultReceiveAudioStreamId);
   request.media_source_path = get_path_string(request_json, {"media", "source", "path"});
   request.video_codec = get_path_string(request_json, {"media", "video", "codec"});
   if (request.video_codec.empty()) {

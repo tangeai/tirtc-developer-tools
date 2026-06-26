@@ -130,6 +130,59 @@ std::string stream_message_summary_json(const DriverContext& context) {
   return out.str();
 }
 
+std::string nullable_string_json(const std::string& value) {
+  if (value.empty()) {
+    return "null";
+  }
+  return "\"" + json_escape(value) + "\"";
+}
+
+std::string nullable_reason_json(const std::string& value) {
+  if (value.empty()) {
+    return "null";
+  }
+  return "\"" + json_escape(value) + "\"";
+}
+
+std::string received_audio_summary_json(const DriverContext& context, bool metadata_shape) {
+  const bool enabled = context.request.receive_audio_enabled || context.received_audio_enabled;
+  const std::string codec =
+      context.received_audio_codec.empty() ? "pcm" : context.received_audio_codec;
+  const uint32_t sample_rate_hz =
+      context.received_audio_sample_rate_hz == 0 ? 16000 : context.received_audio_sample_rate_hz;
+  const uint32_t channels =
+      context.received_audio_channels == 0 ? 1 : context.received_audio_channels;
+  std::ostringstream out;
+  out << "{";
+  if (metadata_shape) {
+    out << "\n  \"artifact_root\": \"" << json_escape(context.artifact_root.string()) << "\","
+        << "\n  \"started_at\": \"" << json_escape(context.started_at) << "\","
+        << "\n  \"finished_at\": \"" << json_escape(context.finished_at) << "\",";
+  }
+  out << "\n  \"enabled\": " << (enabled ? "true" : "false") << ","
+      << "\n  \"stream_id\": " << context.request.receive_audio_stream_id << ","
+      << "\n  \"codec\": \"" << json_escape(codec) << "\","
+      << "\n  \"sample_rate_hz\": " << sample_rate_hz << ","
+      << "\n  \"channels\": " << channels << ","
+      << "\n  \"bits_per_sample\": " << kAudioBitsPerSample << ","
+      << "\n  \"sample_format\": \"s16le\","
+      << "\n  \"first_output_timing_ms\": ";
+  if (context.received_audio_first_output_timing_ms >= 0) {
+    out << context.received_audio_first_output_timing_ms;
+  } else {
+    out << "null";
+  }
+  out << ","
+      << "\n  \"captured_bytes\": " << context.received_audio_captured_bytes << ","
+      << "\n  \"pcm_path\": \"" << json_escape(context.received_audio_pcm_path) << "\","
+      << "\n  \"metadata_path\": \"" << json_escape(context.received_audio_metadata_path) << "\","
+      << "\n  \"mp3_path\": " << nullable_string_json(context.received_audio_mp3_path) << ","
+      << "\n  \"mp3_status\": \"" << json_escape(context.received_audio_mp3_status) << "\","
+      << "\n  \"mp3_reason_code\": " << nullable_reason_json(context.received_audio_mp3_reason_code)
+      << "\n}";
+  return out.str();
+}
+
 std::string build_summary_json(const DriverContext& context) {
   std::ostringstream summary;
   summary << "{\n"
@@ -210,6 +263,9 @@ std::string build_summary_json(const DriverContext& context) {
           << "    \"first_output\": " << (context.first_audio_output_ms >= 0 ? "true" : "false")
           << "\n"
           << "  },\n";
+  if (context.request.receive_audio_enabled || context.received_audio_enabled) {
+    summary << "  \"received_audio\": " << received_audio_summary_json(context, false) << ",\n";
+  }
   if (context.first_video_packet_ms >= 0) {
     summary << "  \"first_video_packet_ms\": " << context.first_video_packet_ms << ",\n";
   }
@@ -327,6 +383,11 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
   } else if ((context->request.role == "device" || context->request.role == "send") &&
              (context->request.remote_id.empty() || context->request.device_secret_key.empty())) {
     *out_reason = "missing_env";
+  } else if ((context->request.role == "device" || context->request.role == "send") &&
+             context->request.receive_audio_enabled &&
+             (context->request.receive_audio_stream_id < 1 ||
+              context->request.receive_audio_stream_id > 255)) {
+    *out_reason = "invalid_request";
   } else if ((context->request.role == "client" || context->request.role == "receive") &&
              (context->request.remote_id.empty() || context->request.token.empty())) {
     *out_reason = "missing_env";
@@ -443,6 +504,10 @@ bool write_summary(DriverContext* context) {
   start_stage(context, "artifact");
   context->finished_at = now_rfc3339();
   const std::filesystem::path summary_path = context->artifact_root / "summary.json";
+  if (context->request.receive_audio_enabled || context->received_audio_enabled) {
+    (void)write_text_file(context->artifact_root / context->received_audio_metadata_path,
+                          received_audio_summary_json(*context, true) + "\n");
+  }
   if (!write_text_file(summary_path, build_summary_json(*context))) {
     finish_stage(context, "artifact", StageResult::Failed, "artifact_write_failed", "");
     return false;

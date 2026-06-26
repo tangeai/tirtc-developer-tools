@@ -17,6 +17,13 @@ describe('tirtc-devtools-cli smoke test', () => {
     expect(output).toContain('DevTools Driver Contract: 1');
   });
 
+  it('should advertise --version from root help', () => {
+    const cliBin = path.resolve(__dirname, '../bin/tirtc-devtools-cli.js');
+    const output = execSync(`node ${cliBin} --help`, {encoding: 'utf-8'});
+
+    expect(output).toContain('--version');
+  });
+
   it('should fail clearly when token issue credentials are missing', () => {
     const cliBin = path.resolve(__dirname, '../bin/tirtc-devtools-cli.js');
 
@@ -97,8 +104,10 @@ describe('tirtc-devtools-cli smoke test', () => {
     expect(output).toContain('Usage: tirtc-devtools-cli device start [options]');
     expect(output).toContain('--video-codec <codec>');
     expect(output).toContain('--audio-codec <codec>');
+    expect(output).toContain('pcm|g711a|aac|opus|amr');
     expect(output).toContain('--audio-sample-rate <hz>');
     expect(output).toContain('--audio-channels <count>');
+    expect(output).toContain('--receive-audio-stream-id <id>');
     expect(output).toContain('--device-id <id>');
     expect(output).toContain('--device-secret-key <key>');
     expect(output).toContain('--endpoint <url>');
