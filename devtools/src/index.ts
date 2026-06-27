@@ -1,9 +1,9 @@
-import {Command} from 'commander';
+import {Command, Option} from 'commander';
 import fs from 'fs';
 import path from 'path';
 
 import {resolveCliPackageRoot} from './embedded_paths';
-import {prepareMediaAssets} from './media_assets';
+import {prepareCliInput, prepareMediaAssets} from './media_assets';
 import {ProgressIndicator} from './progress';
 import {registerTokenCommands, type CliOptions} from './token_command';
 import {runClientStart, runDeviceStart} from './role_driver';
@@ -111,6 +111,38 @@ async function runAssetsPrepare(
   }
 }
 
+async function runInputPrepare(
+  commandOptions: {file?: string; cacheDir?: string},
+  options: CliOptions,
+): Promise<number> {
+  const progress = new ProgressIndicator();
+  progress.start('Preparing fixed CLI input');
+  try {
+    if (!commandOptions.file?.trim()) {
+      throw {reasonCode: 'invalid_source_media', message: 'input prepare requires --file <path>'};
+    }
+    const result = await prepareCliInput({
+      file: commandOptions.file,
+      cacheDir: commandOptions.cacheDir ?? path.join('cache', 'tirtc-devtools'),
+    }, {
+      progress: (message) => {
+        progress.update(message);
+      },
+    });
+
+    progress.succeed('Prepared fixed CLI input');
+    if (options.json) {
+      console.log(JSON.stringify({code: 0, message: 'OK', data: result}));
+    } else {
+      console.log('Prepared CLI input:', JSON.stringify(result, null, 2));
+    }
+    return 0;
+  } catch (error: unknown) {
+    progress.fail('Input prepare failed');
+    return printError(error, options);
+  }
+}
+
 function runAndExit(promise: Promise<number>): void {
   promise.then((code) => process.exit(code));
 }
@@ -122,7 +154,21 @@ program.name('tirtc-devtools-cli')
 
 registerTokenCommands(program, getCliOptions, runAndExit);
 
-const assets = program.command('assets').description('准备 DevTools driver 使用的媒体资产');
+const input = program.command('input').description('准备 DevTools CLI 固定本地输入');
+input.command('prepare')
+    .description('把本地 MP4 准备到固定 CLI 工作区 input/')
+    .requiredOption('--file <path>', '本地 MP4 输入文件')
+    .option('--cache-dir <dir>', 'CLI 工作区根目录', path.join('cache', 'tirtc-devtools'))
+    .addHelpText('after', `
+Examples:
+  $ tirtc-devtools-cli --json input prepare --file ./movie.mp4
+  $ tirtc-devtools-cli --json device start --input file
+`)
+    .action((commandOptions: {file?: string; cacheDir?: string}) => {
+      runAndExit(runInputPrepare(commandOptions, getCliOptions()));
+    });
+
+const assets = program.command('assets', {hidden: true}).description('准备 DevTools driver 使用的媒体资产');
 assets.command('prepare')
     .description('准备默认 runtime assets 或把显式 source 写入 output root')
     .option('--source <path>', '输入 MP4 路径；device start 使用输出的 manifest_path')
@@ -138,40 +184,39 @@ Examples:
 
 const device = program.command('device').description('作为标准上行 device 运行 native DevTools driver');
 device.command('start')
-    .description('启动上行 device，读取 prepared asset 并送出音视频')
-    .option('--artifact-root <dir>', 'artifact 输出目录')
-    .option('--device-id <id>', 'device id；不传时读取 TIRTC_DEVICE_ID')
-    .option('--device-secret-key <key>', 'device secret key；不传时读取 TIRTC_DEVICE_SECRET_KEY')
-    .option('--endpoint <url>', 'TiRTC endpoint；不传时读取 TIRTC_ENDPOINT')
-    .option('--source <path>', 'prepared asset root、manifest_path 或 encoded track；MP4 先运行 assets prepare')
+    .description('启动上行 device，读取固定文件输入或 macOS 系统输入')
+    .option('--input <mode>', 'file|system', 'file')
+    .option('--output <mode>', 'file|system|both', 'file')
+    .option('--cache-dir <dir>', 'CLI 工作区根目录', path.join('cache', 'tirtc-devtools'))
+    .option('--preview', '仅 --input system 合法，显示本地预览')
     .option('--video-codec <codec>', 'h264|h265|mjpeg', 'h264')
-    .option('--audio-codec <codec>', 'pcm|g711a|aac|opus|amr', 'g711a')
-    .option('--audio-sample-rate <hz>', '8000|16000', '8000')
+    .option('--audio-codec <codec>', 'g711a|aac|pcm', 'g711a')
+    .option('--audio-sample-rate <hz>', '8000|16000', '16000')
     .option('--audio-channels <count>', '1|2', '1')
-    .option('--receive-audio-stream-id <id>', '接收 Flutter 本地音频传输的 stream id', '14')
-    .option('--exit-after-first-session', '首个 client 会话完成后主动正常退出并写出 summary')
-    .option('--duration-ms <ms>', '可选自动结束时长；默认持续运行直到用户结束进程')
+    .option('--audio-input-aec <mode>', 'disabled|enabled', 'disabled')
+    .option('--audio-input-agc <level>', 'disabled|low|medium|high', 'disabled')
+    .option('--audio-input-ans <level>', 'disabled|low|medium|high', 'disabled')
+    .option('--audio-output-agc <level>', 'disabled|low|medium|high', 'disabled')
+    .option('--audio-output-ans <level>', 'disabled|low|medium|high', 'disabled')
+    .option('--duration-ms <ms>', '可选自动结束时长；0 表示持续运行', '0')
     .option('--connect-timeout-ms <ms>', 'service ready 最大等待')
     .option('--first-packet-timeout-ms <ms>', '首包最大等待')
-    .option('--client-token-json <path>', 'token issue --json 输出文件；传入时写出本机 bootstrap.json')
+    .option('--first-output-timeout-ms <ms>', 'system 输出首帧 / 首次出声最大等待')
+    .addOption(new Option('--artifact-root <dir>', 'artifact 输出目录').hideHelp())
+    .addOption(new Option('--device-id <id>', 'device id；不传时读取 TIRTC_DEVICE_ID').hideHelp())
+    .addOption(new Option('--device-secret-key <key>', 'device secret key；不传时读取 TIRTC_DEVICE_SECRET_KEY').hideHelp())
+    .addOption(new Option('--endpoint <url>', 'TiRTC endpoint；不传时读取 TIRTC_ENDPOINT').hideHelp())
+    .addOption(new Option('--source <path>', 'legacy prepared asset root、manifest_path 或 encoded track').hideHelp())
+    .addOption(new Option('--receive-audio-stream-id <id>', '接收 Flutter 本地音频传输的 stream id').default('14').hideHelp())
+    .addOption(new Option('--exit-after-first-session', '首个 client 会话完成后主动正常退出并写出 summary').hideHelp())
+    .addOption(new Option('--client-token-json <path>', 'legacy token issue --json 输出文件').hideHelp())
     .addHelpText('after', `
 Examples:
-  $ tirtc-devtools-cli --json assets prepare --source ./movie.mp4 --output-root .build/tirtc-assets
-  $ tirtc-devtools-cli --json device start --source .build/tirtc-assets/manifest.json --artifact-root .build/tirtc-device
+  $ tirtc-devtools-cli --json input prepare --file ./movie.mp4
+  $ tirtc-devtools-cli --json device start --input file --output file
+  $ tirtc-devtools-cli --json device start --input system --preview --output both
 
-device start requires device id, device secret key, and endpoint.
-Missing flags are read from TIRTC_DEVICE_ID, TIRTC_DEVICE_SECRET_KEY, and TIRTC_ENDPOINT.
-
-device start succeeds once the device listener is ready. It keeps running without a client until
-the process is stopped or an explicit --duration-ms deadline is reached.
-Runtime lifecycle logs are written to stderr. With --json, the final envelope remains on stdout.
-
-The native device role echoes every received command with the same command id and payload.
-summary.json and the --json envelope include command_echo evidence.
-
-bootstrap.json is a local handoff artifact for client/sample/validation automation.
-It is only written when --client-token-json is provided.
-It is not a mobile SDK connection protocol.
+Artifacts are written under cache/tirtc-devtools/device by default.
 `)
     .action((commandOptions) => {
       runAndExit(runDeviceStart(commandOptions, getCliOptions()));
@@ -179,30 +224,31 @@ It is not a mobile SDK connection protocol.
 
 const client = program.command('client').description('作为标准下行 client 运行 native DevTools driver');
 client.command('start')
-    .description('启动下行 client，消费 bootstrap 或显式 token 并产出 frame_dump')
-    .option('--artifact-root <dir>', 'artifact 输出目录')
+    .description('启动下行 client，消费 device bootstrap 并输出远端音视频')
     .option('--bootstrap <path>', 'device start 产出的 bootstrap.json')
-    .option('--target-device-id <id>', '目标 device id；优先于 bootstrap')
-    .option('--token <token>', '显式 token；优先于 bootstrap')
-    .option('--endpoint <url>', 'TiRTC endpoint；优先于 bootstrap')
-    .option('--app-id <id>', 'client connect app id；不传时读取 bootstrap 或 TIRTC_APP_ID')
+    .option('--output <mode>', 'file|system|both', 'file')
+    .option('--cache-dir <dir>', 'CLI 工作区根目录', path.join('cache', 'tirtc-devtools'))
+    .option('--audio-output-agc <level>', 'disabled|low|medium|high', 'disabled')
+    .option('--audio-output-ans <level>', 'disabled|low|medium|high', 'disabled')
     .option('--audio-stream-id <id>', '音频 stream id')
     .option('--video-stream-id <id>', '视频 stream id')
-    .option('--consumer <consumer>', 'packet_dump|frame_dump', 'frame_dump')
-    .option('--frame-limit <count>', 'frame_dump 帧数上限')
-    .option('--duration-ms <ms>', '可选自动结束时长；默认由输出条件或用户结束进程')
+    .option('--duration-ms <ms>', '可选自动结束时长；0 表示持续运行', '0')
     .option('--connect-timeout-ms <ms>', 'connect 最大等待')
     .option('--first-packet-timeout-ms <ms>', '首包最大等待')
     .option('--first-output-timeout-ms <ms>', '首帧输出最大等待')
+    .addOption(new Option('--artifact-root <dir>', 'artifact 输出目录').hideHelp())
+    .addOption(new Option('--target-device-id <id>', '目标 device id；优先于 bootstrap').hideHelp())
+    .addOption(new Option('--token <token>', '显式 token；优先于 bootstrap').hideHelp())
+    .addOption(new Option('--endpoint <url>', 'TiRTC endpoint；优先于 bootstrap').hideHelp())
+    .addOption(new Option('--app-id <id>', 'client connect app id；不传时读取 bootstrap 或 TIRTC_APP_ID').hideHelp())
+    .addOption(new Option('--consumer <consumer>', 'packet_dump|frame_dump').default('frame_dump').hideHelp())
+    .addOption(new Option('--frame-limit <count>', 'frame_dump 帧数上限').hideHelp())
     .addHelpText('after', `
 Examples:
-  $ tirtc-devtools-cli --json client start --bootstrap .build/tirtc-device/bootstrap.json
+  $ tirtc-devtools-cli --json client start --bootstrap cache/tirtc-devtools/device/bootstrap.json
+  $ tirtc-devtools-cli --json client start --bootstrap cache/tirtc-devtools/device/bootstrap.json --output both
 
-bootstrap.json is expected to come from a local device start run.
-For mobile device debugging, use token/license QR or a future session QR/deeplink.
-
-The native client role echoes every received command with the same command id and payload.
-summary.json and the --json envelope include command_echo evidence.
+Artifacts are written under cache/tirtc-devtools/client by default.
 `)
     .action((commandOptions) => {
       runAndExit(runClientStart(commandOptions, getCliOptions()));

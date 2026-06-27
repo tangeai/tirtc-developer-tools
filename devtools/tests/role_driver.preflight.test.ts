@@ -45,6 +45,7 @@ function makeRuntimeRoot(root: string): string {
   fs.mkdirSync(path.join(runtimeRoot, 'lib'), {recursive: true});
   fs.writeFileSync(path.join(runtimeRoot, 'include', 'tirtc', 'av.h'), '/* test */\n');
   fs.writeFileSync(path.join(runtimeRoot, 'lib', 'libtirtc_av.so'), '');
+  fs.writeFileSync(path.join(runtimeRoot, 'lib', 'libtirtc_av.dylib'), '');
   return runtimeRoot;
 }
 
@@ -58,6 +59,7 @@ function makeAssetRoot(root: string): string {
 function makeDriver(root: string): string {
   const driverPath = path.join(root, 'devtools_driver_probe');
   fs.writeFileSync(driverPath, '#!/bin/sh\nexit 0\n');
+  fs.writeFileSync(path.join(root, 'libtgrtc.dylib'), '');
   fs.chmodSync(driverPath, 0o755);
   return driverPath;
 }
@@ -299,7 +301,7 @@ describe('role driver preflight failures', () => {
     });
   });
 
-  it('reports missing device identity before native driver startup', async () => {
+  it('reports missing token issuer device secret before native driver startup', async () => {
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     delete process.env.TIRTC_DEVICE_SECRET_KEY;
 
@@ -309,19 +311,17 @@ describe('role driver preflight failures', () => {
     }, {json: true})).resolves.toBe(3);
 
     const envelope = lastEnvelope();
-    expect(envelope.message).toContain(
-      'device start requires device secret key (pass --device-secret-key or set TIRTC_DEVICE_SECRET_KEY)',
-    );
+    expect(envelope.message).toContain('token issuer default config missing required device_secret');
     expect(envelope.data).toMatchObject({
       status: 'failed',
       exit_code: 3,
       role: 'device',
-      reason_code: 'missing_env',
+      reason_code: 'token_config_missing',
       failed_stage: 'preflight',
     });
   });
 
-  it('reports missing device id and endpoint before native driver startup', async () => {
+  it('reports missing token issuer device id before native driver startup', async () => {
     delete process.env.TIRTC_DEVICE_ID;
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
     delete process.env.TIRTC_ENDPOINT;
@@ -332,23 +332,19 @@ describe('role driver preflight failures', () => {
     }, {json: true})).resolves.toBe(3);
 
     const envelope = lastEnvelope();
-    expect(envelope.message).toContain('device id (pass --device-id or set TIRTC_DEVICE_ID)');
-    expect(envelope.message).toContain('endpoint (pass --endpoint or set TIRTC_ENDPOINT)');
+    expect(envelope.message).toContain('token issuer default config missing required device_id');
     expect(envelope.data).toMatchObject({
       status: 'failed',
       exit_code: 3,
       role: 'device',
-      reason_code: 'missing_env',
+      reason_code: 'token_config_missing',
       failed_stage: 'preflight',
     });
   });
 
-  it('accepts OPUS audio codec in device request preflight', async () => {
+  it('rejects OPUS audio codec outside the public device contract', async () => {
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
-    process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeDriver(tempRoot);
-    process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
 
     const artifactRoot = path.join(tempRoot, 'device-opus-audio-codec');
     await expect(runDeviceStart({
@@ -357,12 +353,15 @@ describe('role driver preflight failures', () => {
       audioCodec: 'opus',
       audioSampleRate: '16000',
       audioChannels: '2',
-    }, {json: true})).resolves.toBe(1);
+    }, {json: true})).resolves.toBe(2);
 
-    const request = JSON.parse(
-      fs.readFileSync(path.join(artifactRoot, 'request.redacted.json'), 'utf8'),
-    ) as {media: {audio: {codec: string; sample_rate_hz: number; channels: number}}};
-    expect(request.media.audio).toEqual({codec: 'opus', sample_rate_hz: 16000, channels: 2});
+    expect(lastEnvelope().data).toMatchObject({
+      status: 'failed',
+      exit_code: 2,
+      role: 'device',
+      reason_code: 'audio_codec_unsupported',
+      failed_stage: 'config',
+    });
   });
 
   it('adds receive audio stream id to device request preflight', async () => {
@@ -370,12 +369,14 @@ describe('role driver preflight failures', () => {
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeDriver(tempRoot);
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
+    process.env.TIRTC_RUNTIME_PLATFORM = 'macos-arm64';
     process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
 
     const artifactRoot = path.join(tempRoot, 'device-receive-audio-stream');
     await expect(runDeviceStart({
       artifactRoot,
-      source: makeAssetRoot(tempRoot),
+      input: 'system',
+      output: 'both',
       receiveAudioStreamId: '17',
     }, {json: true})).resolves.toBe(1);
 
@@ -465,7 +466,7 @@ describe('role driver preflight failures', () => {
     });
   });
 
-  it('rejects AMR audio format outside AMR-NB mono', async () => {
+  it('rejects AMR audio codec outside the public device contract', async () => {
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
 
@@ -481,7 +482,7 @@ describe('role driver preflight failures', () => {
       status: 'failed',
       exit_code: 2,
       role: 'device',
-      reason_code: 'audio_format_unsupported',
+      reason_code: 'audio_codec_unsupported',
       failed_stage: 'config',
     });
   });
@@ -621,7 +622,7 @@ describe('role driver preflight failures', () => {
     expect(request.media.source.path).toBe(assetRoot);
     expect(request.media.video.codec).toBe('mjpeg');
     expect(request.media.audio).toEqual({codec: 'aac', sample_rate_hz: 16000, channels: 2});
-    expect(request.run.duration_ms).toBeUndefined();
+    expect(request.run.duration_ms).toBe(0);
     expect(request.probe.app_id).toBe('app-from-token');
   });
 
@@ -637,7 +638,7 @@ describe('role driver preflight failures', () => {
         schema_version: 1,
         bootstrap_id: 'bootstrap-audio',
         app_id: 'app-from-bootstrap',
-        endpoint: 'https://endpoint-from-bootstrap.invalid',
+        endpoint_mode: 'default',
         remote_id: 'server-device-id',
         token: 'client-token-secret',
         audio_stream_id: 10,
@@ -671,10 +672,12 @@ describe('role driver preflight failures', () => {
         audio: {codec: string; sample_rate_hz: number; channels: number};
       };
       require_control_probe: boolean;
+      endpoint_mode: string;
     };
     expect(request.media.video.codec).toBe('h264');
     expect(request.media.audio).toEqual({codec: 'aac', sample_rate_hz: 16000, channels: 2});
     expect(request.require_control_probe).toBe(false);
+    expect(request.endpoint_mode).toBe('default');
   });
 
   it('keeps explicit device duration for bounded automation', async () => {

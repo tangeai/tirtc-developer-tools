@@ -63,6 +63,12 @@ struct RoleRequest {
   std::string case_id;
   std::string pairing_id;
   std::string role;
+  std::string cache_dir;
+  std::string role_dir;
+  std::string input_mode;
+  std::string output_mode = "file";
+  std::string pairing_mode = "standard";
+  std::string endpoint_mode = "default";
   std::string endpoint;
   std::string remote_id;
   std::string device_secret_key;
@@ -77,11 +83,25 @@ struct RoleRequest {
   bool receive_audio_enabled = false;
   int receive_audio_stream_id = kDefaultReceiveAudioStreamId;
   std::string media_source_path;
+  std::string media_input_path;
   std::string video_codec = "h264";
   std::string audio_codec = "g711a";
   uint32_t audio_sample_rate_hz = 8000;
   uint32_t audio_channels = 1;
   std::string output_consumer = "frame_dump";
+  std::string audio_input_aec = "disabled";
+  std::string audio_input_agc = "disabled";
+  std::string audio_input_ans = "disabled";
+  int audio_input_aec_mode = 0;
+  int audio_input_agc_level = 0;
+  int audio_input_ans_level = 0;
+  std::string audio_input_processing_status = "not_requested";
+  std::string audio_output_agc = "disabled";
+  std::string audio_output_ans = "disabled";
+  int audio_output_agc_level = 0;
+  int audio_output_ans_level = 0;
+  std::string audio_output_processing_status = "not_requested";
+  bool preview_requested = false;
   int frame_limit = kDefaultFrameLimit;
   bool exit_after_first_session = false;
   int duration_ms = kDefaultDurationMs;
@@ -142,7 +162,9 @@ struct DriverContext {
   std::string status = "completed";
   std::string reason_code;
   std::string started_at;
+  std::string ready_at;
   std::string finished_at;
+  std::string stop_reason;
   std::chrono::steady_clock::time_point monotonic_started_at{};
   int first_audio_packet_ms = -1;
   int first_video_packet_ms = -1;
@@ -179,6 +201,15 @@ struct DriverContext {
   int stream_message_previous_send_monotonic_ms = -1;
   bool stream_message_periodic_send_ok = false;
   bool stream_message_stopped_after_disconnect = false;
+  std::string media_receive_path;
+  size_t system_video_width = 0;
+  size_t system_video_height = 0;
+  int system_audio_error_code = 0;
+  int system_video_error_code = 0;
+  std::string preview_state = "not_requested";
+  int preview_first_frame_ms = -1;
+  int preview_frame_count = 0;
+  int preview_error_code = 0;
 };
 
 struct ServiceContext {
@@ -203,8 +234,14 @@ struct ConnCallbackContext {
 
 struct OutputEvents {
   std::atomic<int> audio_playing{0};
+  std::atomic<int> audio_buffering{0};
   std::atomic<int> rendering{0};
+  std::atomic<int> video_buffering{0};
   std::atomic<int> failed{0};
+  std::atomic<int> audio_failed{0};
+  std::atomic<int> video_failed{0};
+  std::atomic<int> audio_error_code{0};
+  std::atomic<int> video_error_code{0};
 };
 
 struct AudioCaptureContext {
@@ -245,6 +282,7 @@ TirtcMediaCodec codec_to_runtime_codec(const std::string& codec);
 TirtcVideoBitstreamFormat codec_to_bitstream_format(const std::string& codec);
 std::filesystem::path codec_media_path(const std::string& asset_root, const std::string& codec);
 std::filesystem::path codec_packets_path(const std::string& asset_root, const std::string& codec);
+bool asset_root_uses_fixed_cache(const std::string& asset_root);
 TirtcMediaCodec audio_codec_to_runtime_codec(const std::string& codec);
 std::string audio_track_key(const std::string& codec, uint32_t sample_rate_hz, uint32_t channels);
 std::filesystem::path audio_media_path(const std::string& asset_root, const std::string& codec,
@@ -265,6 +303,7 @@ void finish_stage(DriverContext* context, const std::string& stage, StageResult 
 bool validate_preflight(DriverContext* context, const std::string& request_json,
                         std::string* out_reason);
 bool upload_logs_on_failure(DriverContext* context);
+bool write_media_receive_artifacts(DriverContext* context);
 bool write_summary(DriverContext* context);
 
 void on_signal(int);

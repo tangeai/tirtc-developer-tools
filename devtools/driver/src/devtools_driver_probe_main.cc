@@ -109,6 +109,12 @@ int main(int argc, char** argv) {
   } else {
     context.status = "completed";
     context.exit_code = 0;
+    if (context.ready_at.empty()) {
+      context.ready_at = now_rfc3339();
+    }
+    if (context.stop_reason.empty()) {
+      context.stop_reason = "driver_complete";
+    }
   }
   emit_event(&context, context.exit_code == 0 ? "info" : "error", "artifact",
              "driver.execution.finished",

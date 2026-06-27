@@ -1,4 +1,8 @@
+#include <algorithm>
+
 #include "probe_role_helpers.h"
+#include "tirtc/audio_io_apple.h"
+#include "tirtc/video_io_apple.h"
 #include "tirtc/video_io.h"
 
 namespace devtools_driver_probe {
@@ -7,6 +11,9 @@ namespace {
 constexpr int kReceivePacketEvidenceReadLimit = 300;
 constexpr uint32_t kAudioCaptureMaxBytes = 64 * 1024;
 constexpr uint64_t kEstimatedPcmBytesPerPacket = 320;
+constexpr uint32_t kPrewarmVideoWidth = 640;
+constexpr uint32_t kPrewarmVideoHeight = 360;
+constexpr uint32_t kPrewarmVideoFps = 15;
 
 std::string codec_label_for_runtime_codec(TirtcMediaCodec codec) {
   switch (codec) {
@@ -103,6 +110,10 @@ bool run_receive_role(DriverContext* context) {
   TirtcVideoOutputObserver video_output_observer{};
   video_output_observer.on_state_changed = on_video_output_state_changed;
   video_output_observer.on_error = on_video_output_error;
+  const bool system_output_requested =
+      context->request.output_mode == "system" || context->request.output_mode == "both";
+  const bool file_output_requested =
+      context->request.output_mode == "file" || context->request.output_mode == "both";
 
   if (!context->request.bootstrap_path.empty()) {
     start_stage(context, "bootstrap");
@@ -117,19 +128,59 @@ bool run_receive_role(DriverContext* context) {
     finish_stage(context, "bootstrap", StageResult::Passed, "ok", bootstrap_event);
   }
 
-  if (tirtc_conn_create(nullptr, &connection) != TIRTC_ERROR_OK || connection == nullptr ||
-      tirtc_conn_set_callbacks(connection, &conn_callbacks, &conn_callback_context) !=
-          TIRTC_ERROR_OK ||
-      tirtc_audio_output_create(&audio_output) != TIRTC_ERROR_OK || audio_output == nullptr ||
-      tirtc_video_output_create(&video_output) != TIRTC_ERROR_OK || video_output == nullptr ||
-      tirtc_audio_output_set_observer(audio_output, &audio_output_observer, &output_events) !=
-          TIRTC_ERROR_OK ||
-      tirtc_video_output_set_observer(video_output, &video_output_observer, &output_events) !=
-          TIRTC_ERROR_OK ||
-      tirtc_audio_aout_create_headless_capture(&aout_options, &aout) != TIRTC_ERROR_OK ||
-      aout == nullptr ||
-      tirtc_video_vout_create_headless_capture(&vout_options, &vout) != TIRTC_ERROR_OK ||
-      vout == nullptr || tirtc_audio_output_set_aout(audio_output, aout) != TIRTC_ERROR_OK ||
+  bool output_sink_ok =
+      tirtc_conn_create(nullptr, &connection) == TIRTC_ERROR_OK && connection != nullptr &&
+      tirtc_conn_set_callbacks(connection, &conn_callbacks, &conn_callback_context) ==
+          TIRTC_ERROR_OK &&
+      tirtc_audio_output_create(&audio_output) == TIRTC_ERROR_OK && audio_output != nullptr &&
+      tirtc_video_output_create(&video_output) == TIRTC_ERROR_OK && video_output != nullptr &&
+      tirtc_audio_output_set_observer(audio_output, &audio_output_observer, &output_events) ==
+          TIRTC_ERROR_OK &&
+      tirtc_video_output_set_observer(video_output, &video_output_observer, &output_events) ==
+          TIRTC_ERROR_OK;
+  if (output_sink_ok) {
+    if (system_output_requested) {
+#if defined(__APPLE__)
+      output_sink_ok = tirtc_audio_apple_create_audio_queue_aout(&aout) == TIRTC_ERROR_OK &&
+                       aout != nullptr &&
+                       tirtc_video_apple_create_core_video_vout(&vout) == TIRTC_ERROR_OK &&
+                       vout != nullptr;
+      if (output_sink_ok) {
+        TirtcVideoAppleCoreVideoVoutOptions apple_vout_options{};
+        apple_vout_options.target = TIRTC_VIDEO_APPLE_VOUT_TARGET_APPKIT_WINDOW;
+        apple_vout_options.window_title = "TiRTC DevTools Remote Output";
+        apple_vout_options.window_slot = TIRTC_VIDEO_APPLE_WINDOW_SLOT_RIGHT;
+        output_sink_ok =
+            tirtc_video_apple_core_video_vout_set_options(vout, &apple_vout_options) ==
+            TIRTC_ERROR_OK;
+      }
+      if (output_sink_ok) {
+        TirtcVideoIoConfig prewarm_config{};
+        prewarm_config.width = kPrewarmVideoWidth;
+        prewarm_config.height = kPrewarmVideoHeight;
+        prewarm_config.fps = kPrewarmVideoFps;
+        prewarm_config.pixel_format = TIRTC_VIDEO_PIXEL_FORMAT_I420;
+        output_sink_ok = tirtc_video_vout_open(vout, &prewarm_config) == TIRTC_ERROR_OK;
+        if (output_sink_ok) {
+          (void)emit_event(
+              context, "info", "output", "system_output.video.window_created",
+              "{\"window_title\":\"TiRTC DevTools Remote Output\",\"width\":" +
+                  std::to_string(kPrewarmVideoWidth) +
+                  ",\"height\":" + std::to_string(kPrewarmVideoHeight) + "}");
+        }
+      }
+#else
+      output_sink_ok = false;
+#endif
+    } else {
+      output_sink_ok =
+          tirtc_audio_aout_create_headless_capture(&aout_options, &aout) == TIRTC_ERROR_OK &&
+          aout != nullptr &&
+          tirtc_video_vout_create_headless_capture(&vout_options, &vout) == TIRTC_ERROR_OK &&
+          vout != nullptr;
+    }
+  }
+  if (!output_sink_ok || tirtc_audio_output_set_aout(audio_output, aout) != TIRTC_ERROR_OK ||
       tirtc_video_output_attach_view(video_output, vout) != TIRTC_ERROR_OK ||
       tirtc_audio_output_attach(audio_output, connection, context->request.audio_stream_id) !=
           TIRTC_ERROR_OK ||
@@ -177,6 +228,28 @@ bool run_receive_role(DriverContext* context) {
       context, "info", "connection", "connection.connect.done",
       "{\"remote_id\":\"" + json_escape(context->request.remote_id) + "\",\"elapsed_ms\":0}");
   finish_stage(context, "connect", StageResult::Passed, "ok", connect_event);
+  context->ready_at = now_rfc3339();
+
+  bool raw_dump_active = false;
+  if (file_output_requested) {
+    const bool audio_dump_ok =
+        !context->request.require_audio ||
+        tirtc_audio_output_start_raw_dump(audio_output) == TIRTC_ERROR_OK;
+    const bool video_dump_ok = tirtc_video_output_start_raw_dump(video_output) == TIRTC_ERROR_OK;
+    if (!audio_dump_ok || !video_dump_ok) {
+      context->reason_code = "file_output_failed";
+      const std::string event_id =
+          emit_event(context, "error", "output", "output.file_dump.start.failed",
+                     "{\"reason_code\":\"file_output_failed\"}");
+      finish_stage(context, "output", StageResult::Failed, "file_output_failed", event_id);
+      (void)upload_logs_on_failure(context);
+      cleanup_receive(connection, audio_output, video_output, aout, vout);
+      return false;
+    }
+    raw_dump_active = true;
+    (void)emit_event(context, "info", "output", "output.file_dump.start",
+                     "{\"mode\":\"" + json_escape(context->request.output_mode) + "\"}");
+  }
 
   start_stage(context, "media_receive");
   start_stage(context, "key_frame");
@@ -191,15 +264,26 @@ bool run_receive_role(DriverContext* context) {
     if (!context->request.require_audio) {
       return true;
     }
-    if (!load_headless_audio_capture(&audio_context)) {
-      return false;
-    }
     if (tirtc_audio_output_get_debug_snapshot(audio_output, &audio_debug_snapshot) !=
         TIRTC_ERROR_OK) {
       return false;
     }
-    return audio_debug_snapshot.codec != TIRTC_MEDIA_CODEC_NONE &&
-           audio_debug_snapshot.sample_rate_hz > 0 && audio_debug_snapshot.channels > 0;
+    const bool has_debug = audio_debug_snapshot.codec != TIRTC_MEDIA_CODEC_NONE &&
+                           audio_debug_snapshot.sample_rate_hz > 0 &&
+                           audio_debug_snapshot.channels > 0;
+    if (!has_debug) {
+      return false;
+    }
+    if (system_output_requested) {
+      if (output_events.audio_playing.load() == 0) {
+        return false;
+      }
+      if (audio_context.first_output_ms < 0) {
+        audio_context.first_output_ms = elapsed_ms_since_start(context);
+      }
+      return true;
+    }
+    return load_headless_audio_capture(&audio_context);
   };
   const auto video_codec_label = [&]() {
     TirtcVideoOutputDebugSnapshot snapshot{};
@@ -215,6 +299,25 @@ bool run_receive_role(DriverContext* context) {
             context->command_echo_echoed.load() >= 1);
   };
   const auto frame_ready = [&]() {
+    if (system_output_requested) {
+      pump_platform_events_once();
+      if (output_events.rendering.load() == 0) {
+        return false;
+      }
+      if (video_codec_label().empty()) {
+        return false;
+      }
+      if (frame_context.first_frame_ms < 0) {
+        frame_context.first_frame_ms = elapsed_ms_since_start(context);
+      }
+      frame_context.frames.store(std::max(frame_context.frames.load(), 1));
+      frame_context.first_frame_width = video_debug_snapshot.width;
+      frame_context.first_frame_height = video_debug_snapshot.height;
+      frame_context.first_frame_pixel_format = "system";
+      context->system_video_width = video_debug_snapshot.width;
+      context->system_video_height = video_debug_snapshot.height;
+      return true;
+    }
     if (!load_headless_frame_dump(&frame_context)) {
       return false;
     }
@@ -250,7 +353,7 @@ bool run_receive_role(DriverContext* context) {
     }
     received_control_probe = control_probe_ready();
     context->decoded_video_frame_count = frame_context.frames.load();
-    context->output_consumer = "frame_dump";
+    context->output_consumer = system_output_requested ? "system" : "frame_dump";
     const std::string actual_video_codec = video_codec_label();
     context->actual_video_codec =
         actual_video_codec.empty() ? context->request.video_codec : actual_video_codec;
@@ -297,6 +400,8 @@ bool run_receive_role(DriverContext* context) {
       context->request.audio_sample_rate_hz = audio_debug_snapshot.sample_rate_hz;
       context->request.audio_channels = audio_debug_snapshot.channels;
     }
+    context->system_audio_error_code = output_events.audio_error_code.load();
+    context->system_video_error_code = output_events.video_error_code.load();
     const std::string receive_event_id = emit_event(
         context, "info", "media", "media.video_receive.first_packet",
         "{\"stream_id\":" + stream_id + ",\"codec\":\"" + codec +
@@ -312,20 +417,30 @@ bool run_receive_role(DriverContext* context) {
                        "\",\"width\":" + width + ",\"height\":" + height + ",\"pixel_format\":\"" +
                        pixel_format + "\",\"pts_us\":" + frame_pts_us + "}");
     const std::string output_event_id =
-        emit_event(context, "info", "output", "output.frame_dump.first_frame",
-                   "{\"stream_id\":" + stream_id + ",\"raw_path\":\"" + json_escape(raw_path) +
-                       "\",\"metadata_path\":\"" + json_escape(metadata_path) +
-                       "\",\"width\":" + width + ",\"height\":" + height + ",\"pixel_format\":\"" +
-                       pixel_format + "\",\"pts_us\":" + frame_pts_us + "}");
+        system_output_requested
+            ? emit_event(context, "info", "output", "system_output.video.first_frame",
+                         "{\"stream_id\":" + stream_id + ",\"width\":" + width +
+                             ",\"height\":" + height + ",\"pixel_format\":\"" + pixel_format +
+                             "\",\"pts_us\":" + frame_pts_us + ",\"first_frame_ms\":" +
+                             std::to_string(context->first_rendered_frame_ms) + "}")
+            : emit_event(context, "info", "output", "output.frame_dump.first_frame",
+                         "{\"stream_id\":" + stream_id + ",\"raw_path\":\"" +
+                             json_escape(raw_path) + "\",\"metadata_path\":\"" +
+                             json_escape(metadata_path) + "\",\"width\":" + width +
+                             ",\"height\":" + height + ",\"pixel_format\":\"" + pixel_format +
+                             "\",\"pts_us\":" + frame_pts_us + "}");
     if (context->request.require_audio) {
-      (void)emit_event(
-          context, "info", "output", "output.audio_headless.first_output",
+      const std::string audio_payload =
           "{\"stream_id\":" + std::to_string(static_cast<int>(context->request.audio_stream_id)) +
-              ",\"codec\":\"" + json_escape(context->request.audio_codec) +
-              "\",\"sample_rate_hz\":" + std::to_string(context->request.audio_sample_rate_hz) +
-              ",\"channels\":" + std::to_string(context->request.audio_channels) +
-              ",\"captured_bytes\":" + std::to_string(audio_context.captured_bytes) +
-              ",\"first_output_ms\":" + std::to_string(audio_context.first_output_ms) + "}");
+          ",\"codec\":\"" + json_escape(context->request.audio_codec) +
+          "\",\"sample_rate_hz\":" + std::to_string(context->request.audio_sample_rate_hz) +
+          ",\"channels\":" + std::to_string(context->request.audio_channels) +
+          ",\"captured_bytes\":" + std::to_string(audio_context.captured_bytes) +
+          ",\"first_output_ms\":" + std::to_string(audio_context.first_output_ms) + "}";
+      (void)emit_event(context, "info", "output",
+                       system_output_requested ? "system_output.audio.playing"
+                                               : "output.audio_headless.first_output",
+                       audio_payload);
     }
     finish_stage(context, "media_receive", StageResult::Passed, "ok", receive_event_id);
     finish_stage(context, "key_frame", StageResult::Passed, "ok", key_frame_event_id);
@@ -347,27 +462,46 @@ bool run_receive_role(DriverContext* context) {
       }
     }
   } else {
-    context->reason_code = "output_sink_unavailable";
-    const std::string event_id =
-        emit_event(context, "error", "output", "output.frame_dump.failed",
-                   "{\"reason_code\":\"output_sink_unavailable\",\"stream_id\":" +
-                       std::to_string(static_cast<int>(context->request.video_stream_id)) + "}");
-    finish_stage(context, "media_receive", StageResult::Failed, "output_sink_unavailable",
-                 event_id);
-    finish_stage(context, "key_frame", StageResult::Failed, "output_sink_unavailable", event_id);
-    finish_stage(context, "decode", StageResult::Failed, "output_sink_unavailable", event_id);
-    finish_stage(context, "output", StageResult::Failed, "output_sink_unavailable", event_id);
+    const std::string reason_code =
+        output_events.failed.load() != 0 ? "output_sink_unavailable" : "first_output_timeout";
+    context->reason_code = reason_code;
+    context->system_audio_error_code = output_events.audio_error_code.load();
+    context->system_video_error_code = output_events.video_error_code.load();
+    const std::string event_id = emit_event(
+        context, "error", "output",
+        reason_code == "first_output_timeout" ? "output.first_output.timeout"
+                                              : "output.frame_dump.failed",
+        "{\"reason_code\":\"" + json_escape(reason_code) + "\",\"stream_id\":" +
+            std::to_string(static_cast<int>(context->request.video_stream_id)) +
+            ",\"audio_playing\":" + std::to_string(output_events.audio_playing.load()) +
+            ",\"video_rendering\":" + std::to_string(output_events.rendering.load()) + "}");
+    finish_stage(context, "media_receive", StageResult::Failed, reason_code, event_id);
+    finish_stage(context, "key_frame", StageResult::Failed, reason_code, event_id);
+    finish_stage(context, "decode", StageResult::Failed, reason_code, event_id);
+    finish_stage(context, "output", StageResult::Failed, reason_code, event_id);
   }
 
-  if (context->decoded_video_frame_count < context->request.frame_limit ||
-      (context->request.require_audio && context->first_audio_packet_ms < 0) ||
-      (context->request.require_control_probe && !received_control_probe)) {
+  bool role_ok = context->decoded_video_frame_count >= context->request.frame_limit &&
+                 (!context->request.require_audio || context->first_audio_packet_ms >= 0) &&
+                 (!context->request.require_control_probe || received_control_probe);
+  if (!role_ok) {
     (void)upload_logs_on_failure(context);
   }
+  if (raw_dump_active) {
+    if (context->request.require_audio) {
+      (void)tirtc_audio_output_stop_raw_dump(audio_output);
+    }
+    (void)tirtc_video_output_stop_raw_dump(video_output);
+  }
+  if (role_ok && file_output_requested && !write_media_receive_artifacts(context)) {
+    role_ok = false;
+    const std::string event_id =
+        emit_event(context, "error", "output", "output.file_dump.failed",
+                   "{\"reason_code\":\"file_output_failed\"}");
+    finish_stage(context, "output", StageResult::Failed, "file_output_failed", event_id);
+  }
   cleanup_receive(connection, audio_output, video_output, aout, vout);
-  return context->decoded_video_frame_count >= context->request.frame_limit &&
-         (!context->request.require_audio || context->first_audio_packet_ms >= 0) &&
-         (!context->request.require_control_probe || received_control_probe);
+  return role_ok;
 }
 
 }  // namespace devtools_driver_probe

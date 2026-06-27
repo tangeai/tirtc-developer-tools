@@ -73,55 +73,68 @@ describe('tirtc-devtools-cli smoke test', () => {
     expect(output).toContain('does not implement login');
   });
 
-  it('should expose assets prepare as a first-class command', () => {
+  it('should expose input prepare as a first-class fixed-cache command', () => {
     const cliBin = path.resolve(__dirname, '../bin/tirtc-devtools-cli.js');
-    const output = execSync(`node ${cliBin} assets prepare --help`, {encoding: 'utf-8'});
+    const output = execSync(`node ${cliBin} input prepare --help`, {encoding: 'utf-8'});
 
-    expect(output).toContain('Usage: tirtc-devtools-cli assets prepare [options]');
-    expect(output).toContain('--source <path>');
-    expect(output).toContain('assets prepare --source ./movie.mp4');
-    expect(output).toContain('device start --source .build/tirtc-assets/manifest.json');
+    expect(output).toContain('Usage: tirtc-devtools-cli input prepare [options]');
+    expect(output).toContain('--file <path>');
+    expect(output).toContain('--cache-dir <dir>');
+    expect(output).toContain('input prepare --file ./movie.mp4');
+    expect(output).toContain('device start --input file');
+    expect(output).not.toContain('--source <path>');
+    expect(output).not.toContain('--output-root <dir>');
   });
 
-  it('should expose client start as a first-class command', () => {
+  it('should expose client start with bootstrap and output modes only on the public path', () => {
     const cliBin = path.resolve(__dirname, '../bin/tirtc-devtools-cli.js');
     const output = execSync(`node ${cliBin} client start --help`, {encoding: 'utf-8'});
 
     expect(output).toContain('Usage: tirtc-devtools-cli client start [options]');
     expect(output).toContain('--bootstrap <path>');
-    expect(output).toContain('--target-device-id <id>');
-    expect(output).toContain('--token <token>');
-    expect(output).toContain('--app-id <id>');
-    expect(output).toContain('future session QR/deeplink');
-    expect(output).toContain('echoes every received command');
-    expect(output).toContain('command_echo evidence');
+    expect(output).toContain('--output <mode>');
+    expect(output).toContain('--cache-dir <dir>');
+    expect(output).toContain('--audio-output-agc <level>');
+    expect(output).toContain('--audio-output-ans <level>');
+    expect(output).not.toContain('--target-device-id <id>');
+    expect(output).not.toContain('--token <token>');
+    expect(output).not.toContain('--endpoint <url>');
+    expect(output).not.toContain('--app-id <id>');
+    expect(output).not.toContain('--consumer <consumer>');
   });
 
-  it('should expose device start as a first-class command without client/token-only flags', () => {
+  it('should expose device start with input/output/cache/preview and 3A options', () => {
     const cliBin = path.resolve(__dirname, '../bin/tirtc-devtools-cli.js');
     const output = execSync(`node ${cliBin} device start --help`, {encoding: 'utf-8'});
 
     expect(output).toContain('Usage: tirtc-devtools-cli device start [options]');
+    expect(output).toContain('--input <mode>');
+    expect(output).toContain('--output <mode>');
+    expect(output).toContain('--cache-dir <dir>');
+    expect(output).toContain('--preview');
     expect(output).toContain('--video-codec <codec>');
     expect(output).toContain('--audio-codec <codec>');
-    expect(output).toContain('pcm|g711a|aac|opus|amr');
+    expect(output).toContain('g711a|aac|pcm');
     expect(output).toContain('--audio-sample-rate <hz>');
     expect(output).toContain('--audio-channels <count>');
-    expect(output).toContain('--receive-audio-stream-id <id>');
-    expect(output).toContain('--device-id <id>');
-    expect(output).toContain('--device-secret-key <key>');
-    expect(output).toContain('--endpoint <url>');
+    expect(output).toContain('--audio-input-aec <mode>');
+    expect(output).toContain('--audio-input-agc <level>');
+    expect(output).toContain('--audio-input-ans <level>');
+    expect(output).toContain('--audio-output-agc <level>');
+    expect(output).toContain('--audio-output-ans <level>');
+    expect(output).not.toContain('--artifact-root <dir>');
+    expect(output).not.toContain('--source <path>');
+    expect(output).not.toContain('--receive-audio-stream-id <id>');
+    expect(output).not.toContain('--device-id <id>');
+    expect(output).not.toContain('--device-secret-key <key>');
+    expect(output).not.toContain('--endpoint <url>');
     expect(output).not.toContain('--execution-id');
     expect(output).not.toContain('--case-id');
     expect(output).not.toContain('--app-id');
     expect(output).not.toContain('--remote-id');
-    expect(output).toContain('TIRTC_DEVICE_SECRET_KEY');
-    expect(output).toContain('--client-token-json <path>');
-    expect(output).toContain('MP4 先运行 assets prepare');
-    expect(output).toContain('bootstrap.json is a local handoff artifact');
-    expect(output).toContain('not a mobile SDK connection protocol');
-    expect(output).toContain('echoes every received command');
-    expect(output).toContain('command_echo evidence');
+    expect(output).not.toContain('--client-token-json <path>');
+    expect(output).not.toContain('manifest.json');
+    expect(output).not.toContain('token JSON');
   });
 
   it('should expose license qrcode as a first-class command', () => {

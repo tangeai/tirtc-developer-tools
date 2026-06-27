@@ -9,8 +9,10 @@
 #include <thread>
 #include <vector>
 
+#include "probe_device_bootstrap.h"
 #include "probe_role_helpers.h"
 #include "probe_send_session.h"
+#include "probe_system_send_role.h"
 
 namespace devtools_driver_probe {
 namespace {
@@ -69,6 +71,7 @@ struct ActiveSendSession {
   bool audio_attached = false;
   bool video_attached = false;
   bool receive_audio_attached = false;
+  bool receive_audio_raw_dump_active = false;
   bool sent_first_audio = false;
   bool sent_first_video = false;
   bool sent_first_stream_message = false;
@@ -145,6 +148,10 @@ void cleanup_session_receive_audio(ActiveSendSession* session) {
   if (session == nullptr) {
     return;
   }
+  if (session->receive_audio_raw_dump_active && session->receive_audio_output != nullptr) {
+    (void)tirtc_audio_output_stop_raw_dump(session->receive_audio_output);
+    session->receive_audio_raw_dump_active = false;
+  }
   if (session->receive_audio_output != nullptr) {
     (void)tirtc_audio_output_set_observer(session->receive_audio_output, nullptr, nullptr);
     (void)tirtc_audio_output_detach(session->receive_audio_output);
@@ -218,6 +225,16 @@ bool start_receive_audio_capture_for_session(DriverContext* context, ActiveSendS
   }
 
   session->receive_audio_attached = true;
+  if (context->request.output_mode == "file" || context->request.output_mode == "both") {
+    const TirtcError dump_status = tirtc_audio_output_start_raw_dump(session->receive_audio_output);
+    if (dump_status != TIRTC_ERROR_OK) {
+      *reason_code = "file_output_failed";
+      *event_kind = "output.file_dump.start.failed";
+      cleanup_session_receive_audio(session);
+      return false;
+    }
+    session->receive_audio_raw_dump_active = true;
+  }
   (void)emit_event(
       context, "info", "output", "output.audio_receive.start",
       "{\"session_index\":" + std::to_string(session->session_index) +
@@ -720,55 +737,16 @@ bool run_send_role(DriverContext* context) {
       "{\"remote_id\":\"" + json_escape(context->request.remote_id) + "\",\"elapsed_ms\":0}");
   finish_stage(context, "connect", StageResult::Passed, "ok", listen_event);
 
-  if (!context->request.token.empty()) {
-    start_stage(context, "bootstrap");
-    context->bootstrap_id = context->request.execution_id + "-bootstrap";
-    context->bootstrap_path = (context->artifact_root / "bootstrap.json").string();
-    std::ostringstream bootstrap;
-    bootstrap << "{\n"
-              << "  \"schema_version\": 1,\n"
-              << "  \"bootstrap_id\": \"" << json_escape(context->bootstrap_id) << "\",\n"
-              << "  \"execution_id\": \"" << json_escape(context->request.execution_id) << "\",\n"
-              << "  \"pairing_id\": \"" << json_escape(context->request.pairing_id) << "\",\n"
-              << "  \"created_at\": \"" << now_rfc3339() << "\",\n"
-              << "  \"producer\": \"cli_device\",\n"
-              << "  \"app_id\": \"" << json_escape(context->request.app_id) << "\",\n"
-              << "  \"endpoint\": \"" << json_escape(context->request.endpoint) << "\",\n"
-              << "  \"device_id\": \"" << json_escape(context->request.remote_id) << "\",\n"
-              << "  \"remote_id\": \"" << json_escape(context->request.remote_id) << "\",\n"
-              << "  \"token\": \"" << json_escape(context->request.token) << "\",\n"
-              << "  \"token_fingerprint\": \"" << json_escape(context->request.token_fingerprint)
-              << "\",\n"
-              << "  \"require_audio\": true,\n"
-              << "  \"require_control_probe\": false,\n"
-              << "  \"audio_stream_id\": " << static_cast<int>(context->request.audio_stream_id)
-              << ",\n"
-              << "  \"video_stream_id\": " << static_cast<int>(context->request.video_stream_id)
-              << ",\n"
-              << "  \"audio_codec\": \"" << json_escape(context->request.audio_codec) << "\",\n"
-              << "  \"sample_rate_hz\": " << context->request.audio_sample_rate_hz << ",\n"
-              << "  \"channels\": " << context->request.audio_channels << ",\n"
-              << "  \"bits_per_sample\": " << kAudioBitsPerSample << ",\n"
-              << "  \"video_codec\": \"" << json_escape(context->request.video_codec) << "\""
-              << "\n}\n";
-    if (!write_text_file(context->bootstrap_path, bootstrap.str())) {
-      context->reason_code = "artifact_write_failed";
-      finish_stage(context, "bootstrap", StageResult::Failed, "artifact_write_failed", "");
-      cleanup_pending_connections(&service_context);
-      (void)tirtc_conn_service_stop(service);
-      (void)upload_logs_on_failure(context);
-      tirtc_uninit();
-      return false;
-    }
-    const std::string bootstrap_event =
-        emit_event(context, "info", "bootstrap", "bootstrap.write.done",
-                   "{\"bootstrap_id\":\"" + json_escape(context->bootstrap_id) + "\",\"path\":\"" +
-                       json_escape(context->bootstrap_path) + "\",\"device_id\":\"" +
-                       json_escape(context->request.remote_id) + "\",\"audio_stream_id\":" +
-                       std::to_string(static_cast<int>(context->request.audio_stream_id)) +
-                       ",\"video_stream_id\":" +
-                       std::to_string(static_cast<int>(context->request.video_stream_id)) + "}");
-    finish_stage(context, "bootstrap", StageResult::Passed, "ok", bootstrap_event);
+  if (!context->request.token.empty() && !write_device_bootstrap_and_ready(context)) {
+    cleanup_pending_connections(&service_context);
+    (void)tirtc_conn_service_stop(service);
+    (void)upload_logs_on_failure(context);
+    tirtc_uninit();
+    return false;
+  }
+
+  if (context->request.input_mode == "system") {
+    return run_system_send_role(context, service, &service_context);
   }
 
   SendAssets assets{};
@@ -1118,6 +1096,13 @@ bool run_send_role(DriverContext* context) {
                  : "service_stopped");
   drain_pending_command_echoes(context);
   record_received_audio_for_active_sessions(context, active_sessions);
+  for (const auto& session : active_sessions) {
+    if (session != nullptr && session->receive_audio_raw_dump_active &&
+        session->receive_audio_output != nullptr) {
+      (void)tirtc_audio_output_stop_raw_dump(session->receive_audio_output);
+      session->receive_audio_raw_dump_active = false;
+    }
+  }
   inputs.stop();
   (void)emit_event(
       context, "info", "media", "media.audio_send.summary",
@@ -1150,6 +1135,16 @@ bool run_send_role(DriverContext* context) {
             std::to_string(context->received_audio_first_output_timing_ms) + ",\"mp3_status\":\"" +
             json_escape(context->received_audio_mp3_status) + "\",\"mp3_reason_code\":\"" +
             json_escape(context->received_audio_mp3_reason_code) + "\"}");
+  }
+  if (context->request.receive_audio_enabled &&
+      (context->request.output_mode == "file" || context->request.output_mode == "both") &&
+      !write_media_receive_artifacts(context)) {
+    (void)upload_logs_on_failure(context);
+    (void)tirtc_conn_service_stop(service);
+    cleanup_active_sessions(context, &inputs, &active_sessions, exit_reason);
+    inputs.cleanup();
+    cleanup_pending_connections(&service_context);
+    return false;
   }
   (void)tirtc_conn_service_stop(service);
   cleanup_active_sessions(context, &inputs, &active_sessions, exit_reason);

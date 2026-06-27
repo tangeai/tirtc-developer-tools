@@ -130,9 +130,11 @@ mkdir -p "$OUTPUT_DIR"
 
 sources=(
   "$DRIVER_ROOT/src/probe_common.cc"
+  "$DRIVER_ROOT/src/probe_device_bootstrap.cc"
   "$DRIVER_ROOT/src/probe_evidence.cc"
   "$DRIVER_ROOT/src/probe_role_helpers.cc"
   "$DRIVER_ROOT/src/probe_send_session.cc"
+  "$DRIVER_ROOT/src/probe_system_send_role.cc"
   "$DRIVER_ROOT/src/probe_send_role.cc"
   "$DRIVER_ROOT/src/probe_receive_role.cc"
   "$DRIVER_ROOT/src/devtools_driver_probe_main.cc"
@@ -147,6 +149,7 @@ if [[ "$PLATFORM" == "macos-arm64" ]]; then
     -o "$OUTPUT" \
     -L "$RUNTIME_LIB_DIR" \
     -Wl,-rpath,@loader_path \
+    -framework CoreFoundation \
     -ltirtc_av
 else
   "${CXX:-g++}" \

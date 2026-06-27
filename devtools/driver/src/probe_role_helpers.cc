@@ -14,6 +14,10 @@
 #include <thread>
 #include <utility>
 
+#if defined(__APPLE__)
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+
 namespace devtools_driver_probe {
 namespace {
 
@@ -260,14 +264,20 @@ void on_audio_output_state_changed(TirtcAudioOutput*, TirtcAudioOutputState stat
   auto* events = static_cast<OutputEvents*>(user_data);
   if (state == TIRTC_AUDIO_OUTPUT_STATE_PLAYING) {
     events->audio_playing.store(1);
+  } else if (state == TIRTC_AUDIO_OUTPUT_STATE_BUFFERING) {
+    events->audio_buffering.store(1);
   } else if (state == TIRTC_AUDIO_OUTPUT_STATE_FAILED) {
     events->failed.store(1);
+    events->audio_failed.store(1);
   }
 }
 
-void on_audio_output_error(TirtcAudioOutput*, TirtcError, TirtcOwnedString* owned_message,
+void on_audio_output_error(TirtcAudioOutput*, TirtcError error, TirtcOwnedString* owned_message,
                            void* user_data) {
-  static_cast<OutputEvents*>(user_data)->failed.store(1);
+  auto* events = static_cast<OutputEvents*>(user_data);
+  events->failed.store(1);
+  events->audio_failed.store(1);
+  events->audio_error_code.store(static_cast<int>(error));
   tirtc_owned_string_release(owned_message);
 }
 
@@ -276,14 +286,20 @@ void on_video_output_state_changed(TirtcVideoOutput*, TirtcVideoOutputState stat
   auto* events = static_cast<OutputEvents*>(user_data);
   if (state == TIRTC_VIDEO_OUTPUT_STATE_RENDERING) {
     events->rendering.store(1);
+  } else if (state == TIRTC_VIDEO_OUTPUT_STATE_BUFFERING) {
+    events->video_buffering.store(1);
   } else if (state == TIRTC_VIDEO_OUTPUT_STATE_FAILED) {
     events->failed.store(1);
+    events->video_failed.store(1);
   }
 }
 
-void on_video_output_error(TirtcVideoOutput*, TirtcError, TirtcOwnedString* owned_message,
+void on_video_output_error(TirtcVideoOutput*, TirtcError error, TirtcOwnedString* owned_message,
                            void* user_data) {
-  static_cast<OutputEvents*>(user_data)->failed.store(1);
+  auto* events = static_cast<OutputEvents*>(user_data);
+  events->failed.store(1);
+  events->video_failed.store(1);
+  events->video_error_code.store(static_cast<int>(error));
   tirtc_owned_string_release(owned_message);
 }
 
@@ -357,14 +373,22 @@ bool load_headless_frame_dump(FrameDumpContext* context) {
   return true;
 }
 
+void pump_platform_events_once() {
+#if defined(__APPLE__)
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.005, false);
+#endif
+}
+
 bool wait_until(int timeout_ms, const std::function<bool()>& predicate) {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
   while (std::chrono::steady_clock::now() < deadline && g_stop_requested.load() == 0) {
     if (predicate()) {
       return true;
     }
+    pump_platform_events_once();
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
   }
+  pump_platform_events_once();
   return predicate();
 }
 

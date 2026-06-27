@@ -22,8 +22,8 @@ tirtc-devtools-cli --help
 
 ## 平台
 
-- `macos-arm64`：Token、资产准备、device、client、package smoke、native device / client qualification。
-- `linux-x64`：Token、资产准备、device、client、package smoke、native driver packaging。device / client 运行在 Linux host 或 `linux/amd64` container。
+- `macos-arm64`：Token、license、固定输入准备、file input/output、system input/output、本地预览、package smoke、native driver validation。
+- `linux-x64`：Token、license、固定输入准备、file input/output、package smoke、native driver packaging。`system` 输入、`system` 输出和 `--preview` 在本轮不会静默回退。
 
 ## Token 签发 HTTP 服务
 
@@ -86,88 +86,123 @@ tirtc-devtools-cli --json license qrcode <LICENSE> \
   --endpoint "<TIRTC_ENDPOINT>"
 ```
 
-## 资产准备
+## 固定工作区
 
-```sh
-tirtc-devtools-cli --json assets prepare \
-  --source ./movie.mp4 \
-  --output-root .build/tirtc-assets
+角色命令默认使用 `cache/tirtc-devtools` 作为 CLI 工作区：
+
+```text
+cache/tirtc-devtools/
+  input/
+    media_input.json
+  device/
+    bootstrap.json
+    summary.json
+    events.jsonl
+    output/
+  client/
+    summary.json
+    events.jsonl
+    output/
 ```
 
-命令会返回 `manifest_path`。
+`--cache-dir <dir>` 可以切换整套工作区。`input prepare` 只重建 `input/`，`device start` 只重建 `device/`，`client start` 只重建 `client/`。
+
+## 本地文件输入
+
+```sh
+tirtc-devtools-cli --json input prepare \
+  --file ./movie.mp4 \
+  --cache-dir cache/tirtc-devtools
+```
+
+命令会把本地 MP4 准备成固定文件输入，并写入 `cache/tirtc-devtools/input/media_input.json`。后续 `device start --input file` 只读取这个固定输入目录。
 
 ## Device
 
+device 作为标准上行对端运行。启动前需要现有 token issuer 默认配置：
+
 ```sh
+export TIRTC_ACCESS_KEY_ID="<ACCESS_KEY_ID>"
+export TIRTC_SECRET_KEY_ID="<SECRET_KEY_ID>"
+export TIRTC_APP_ID="<APP_ID>"
 export TIRTC_DEVICE_ID="<DEVICE_ID>"
 export TIRTC_DEVICE_SECRET_KEY="<DEVICE_SECRET_KEY>"
-export TIRTC_ENDPOINT="<TIRTC_ENDPOINT>"
-
-tirtc-devtools-cli --json device start \
-  --source .build/tirtc-assets/manifest.json \
-  --video-codec h264 \
-  --receive-audio-stream-id 14 \
-  --artifact-root .build/devtools-cli/device-h264
 ```
 
-默认持续运行。自动化场景可以传 `--duration-ms <ms>`。
+Device 角色不需要提供连接地址或令牌文件。生成的 bootstrap 使用默认连接模式，runtime 使用自身默认连接配置。
 
-常用媒体参数：
-
-- `--audio-codec <codec>`：设备端下发音频格式，支持 `g711a`、`aac`、`pcm`、`opus`、`amr`。`amr` 只支持 8 kHz mono。
-- `--audio-sample-rate <hz>`：设备端下发音频采样率，支持 `8000`、`16000`。
-- `--audio-channels <count>`：设备端下发音频声道数，支持 `1`、`2`；`amr` 只支持 `1`。
-- `--receive-audio-stream-id <id>`：device 侧接收 Flutter 本地音频采集与传输的 stream id，默认 `14`。非法值会在配置阶段失败，`reason_code` 为 `invalid_request`。
-
-当 Flutter 本地音频发送到 `--receive-audio-stream-id` 指定的 stream 后，device summary 会包含 `received_audio`：
-
-```json
-{
-  "received_audio": {
-    "enabled": true,
-    "stream_id": 14,
-    "codec": "g711a",
-    "sample_rate_hz": 16000,
-    "channels": 1,
-    "bits_per_sample": 16,
-    "sample_format": "s16le",
-    "first_output_timing_ms": 120,
-    "captured_bytes": 4096,
-    "pcm_path": "received-audio.pcm",
-    "metadata_path": "received-audio.metadata.json",
-    "mp3_path": "received-audio-20260624-120000.mp3",
-    "mp3_status": "generated",
-    "mp3_reason_code": "ok"
-  }
-}
-```
-
-`received-audio.pcm` 来自 runtime public facade 的 `TirtcAudioOutput + headless TirtcAudioAout` render PCM。`received-audio.metadata.json` 与 summary 中的 `received_audio` 保持同字段合同，并补充 artifact root 与开始 / 结束时间。CLI 会在 PCM 和格式信息完整时调用 FFmpeg 派生 MP3；缺 FFmpeg 时记录 `mp3_status = "skipped"`、`mp3_reason_code = "ffmpeg_unavailable"`，FFmpeg 转码失败时记录 `mp3_status = "failed"`、`mp3_reason_code = "ffmpeg_failed"`。
-
-如果要生成本机 client 使用的 `bootstrap.json`，先准备 client token：
+文件上行：
 
 ```sh
-tirtc-devtools-cli --json token issue "$TIRTC_DEVICE_ID" \
-  --endpoint "$TIRTC_ENDPOINT" \
-  > .build/devtools-client-token.json
+tirtc-devtools-cli --json input prepare --file ./movie.mp4
+
+tirtc-devtools-cli --json device start \
+  --input file \
+  --output file \
+  --video-codec h264 \
+  --audio-codec g711a \
+  --audio-sample-rate 16000
 ```
 
-再启动 device：
+macOS 系统摄像头 / 麦克风上行并打开本地预览：
 
 ```sh
 tirtc-devtools-cli --json device start \
-  --source .build/tirtc-assets/manifest.json \
+  --input system \
+  --preview \
+  --output both \
   --video-codec h264 \
-  --client-token-json .build/devtools-client-token.json \
-  --artifact-root .build/devtools-cli/device-h264
+  --audio-codec g711a
 ```
+
+成功进入 ready 后，device 会写出 `cache/tirtc-devtools/device/bootstrap.json`。client 只需要消费这个 bootstrap。
+
+常用参数：
+
+- `--input file|system`：默认 `file`；`system` 当前只支持 macOS。
+- `--output file|system|both`：默认 `file`；`system` 当前只支持 macOS。
+- `--preview`：只对 `--input system` 合法。
+- `--video-codec h264|h265|mjpeg`：默认 `h264`。
+- `--audio-codec g711a|aac|pcm`：默认 `g711a`。
+- `--audio-sample-rate 8000|16000`：默认 `16000`。
+- `--audio-channels 1|2`：默认 `1`。
+- `--duration-ms <ms>`：默认 `0`，表示持续运行到信号或失败。
+
+链路级 3A 参数：
+
+- 输入链路：`--audio-input-aec disabled|enabled`、`--audio-input-agc disabled|low|medium|high`、`--audio-input-ans disabled|low|medium|high`，只适用于 `--input system`。
+- 输出链路：`--audio-output-agc disabled|low|medium|high`、`--audio-output-ans disabled|low|medium|high`，只适用于 `--output system|both`。
+
+不适用的平台能力或 3A 组合会在启动前失败并写入稳定 `reason_code`。
 
 ## Client
 
+client 作为标准下行对端运行，消费 device 写出的 bootstrap：
+
 ```sh
 tirtc-devtools-cli --json client start \
-  --bootstrap .build/devtools-cli/device-h264/bootstrap.json \
-  --artifact-root .build/devtools-cli/client-h264
+  --bootstrap cache/tirtc-devtools/device/bootstrap.json \
+  --output both
 ```
 
-client 会写出 `summary.json`、`events.jsonl`、runtime logs 和首帧渲染产物。
+常用参数：
+
+- `--bootstrap <path>`：必填，指向 device 产出的 `bootstrap.json`。
+- `--output file|system|both`：默认 `file`；`system` 当前只支持 macOS。
+- `--cache-dir <dir>`：默认 `cache/tirtc-devtools`。
+- `--duration-ms <ms>`：默认 `0`，表示持续运行到信号或失败。
+- `--first-packet-timeout-ms <ms>`：等待远端媒体首包。
+- `--first-output-timeout-ms <ms>`：等待 system 输出首次出声 / 首帧。
+
+`--output file` 或 `--output both` 会在 `client/output/` 写出收到的远端原始媒体、packet index 和 `media_receive.json`：
+
+```text
+cache/tirtc-devtools/client/output/
+  audio_receive.<codec>
+  audio_receive.<codec>.packets.csv
+  video_receive.<codec>
+  video_receive.<codec>.packets.csv
+  media_receive.json
+```
+
+`--output system` 或 `--output both` 会在 macOS 上把远端音频送到系统输出设备，并为远端视频创建窗口。summary 中的 `system_output.audio.state` 和 `system_output.video.state` 记录出声 / 出图状态。

@@ -1,5 +1,6 @@
 import {execFile as execFileCb, spawn} from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import {promisify} from 'util';
 
@@ -18,6 +19,66 @@ type PrepareMediaAssetsResult = {
   assets_dir: string;
   manifest_path: string;
   cache_hit: boolean;
+};
+
+type PrepareCliInputRequest = {
+  file: string;
+  cacheDir: string;
+};
+
+type CliMediaTrack = {
+  path: string;
+  packet_index_path: string;
+  codec: string;
+  width?: number;
+  height?: number;
+  fps?: number;
+  fps_num?: number;
+  fps_den?: number;
+  sample_rate_hz?: number;
+  channels?: number;
+  bits_per_sample?: number;
+};
+
+type RuntimeAssetManifest = {
+  video_tracks?: Record<string, CliMediaTrack>;
+  audio_tracks?: Record<string, CliMediaTrack>;
+};
+
+type CliPreparedInputTrack = {
+  codec: string;
+  path: string;
+  packet_index_path: string;
+  bytes: number;
+  packet_count: number;
+};
+
+type CliPreparedAudioTrack = CliPreparedInputTrack & {
+  sample_rate_hz: number;
+  channels: number;
+  bits_per_sample: number;
+  sample_format: string;
+};
+
+type CliPreparedVideoTrack = CliPreparedInputTrack & {
+  bitstream_format: string;
+  width: number;
+  height: number;
+  fps: number;
+};
+
+export type PrepareCliInputResult = {
+  cache_dir: string;
+  input_dir: string;
+  media_input_path: string;
+  media_input: {
+    schema_version: 1;
+    prepared_at: string;
+    source_file: string;
+    cache_dir: string;
+    audio: Record<string, CliPreparedAudioTrack>;
+    video: Record<string, CliPreparedVideoTrack>;
+  };
 };
 
 type ExecFileLike = (
@@ -179,6 +240,64 @@ function assertPrepareRequest(request: PrepareMediaAssetsRequest): void {
   }
 }
 
+function cleanManagedDirectory(dirPath: string): void {
+  fs.rmSync(dirPath, {recursive: true, force: true});
+  fs.mkdirSync(dirPath, {recursive: true});
+}
+
+function readPacketCount(packetIndexPath: string): number {
+  const text = fs.readFileSync(packetIndexPath, 'utf8').trim();
+  if (text.length === 0) {
+    return 0;
+  }
+  return Math.max(0, text.split(/\r?\n/).length - 1);
+}
+
+function copyPreparedTrack(
+  assetsDir: string,
+  inputDir: string,
+  track: CliMediaTrack,
+  mediaFileName: string,
+  packetFileName: string,
+): {path: string; packet_index_path: string; bytes: number; packet_count: number} {
+  const sourceMediaPath = path.join(assetsDir, track.path);
+  const sourcePacketPath = path.join(assetsDir, track.packet_index_path);
+  const targetMediaPath = path.join(inputDir, mediaFileName);
+  const targetPacketPath = path.join(inputDir, packetFileName);
+  if (!fs.existsSync(sourceMediaPath) || !fs.existsSync(sourcePacketPath)) {
+    throw new PrepareMediaAssetsError('prepared asset track missing', 'invalid_source_media');
+  }
+  fs.copyFileSync(sourceMediaPath, targetMediaPath);
+  fs.copyFileSync(sourcePacketPath, targetPacketPath);
+  return {
+    path: path.join('input', mediaFileName),
+    packet_index_path: path.join('input', packetFileName),
+    bytes: fs.statSync(targetMediaPath).size,
+    packet_count: readPacketCount(targetPacketPath),
+  };
+}
+
+function trackFps(track: CliMediaTrack): number {
+  if (typeof track.fps === 'number') {
+    return track.fps;
+  }
+  if (typeof track.fps_num === 'number' && typeof track.fps_den === 'number' && track.fps_den > 0) {
+    return track.fps_num / track.fps_den;
+  }
+  return 0;
+}
+
+function requireTrack(
+  tracks: Record<string, CliMediaTrack> | undefined,
+  key: string,
+): CliMediaTrack {
+  const track = tracks?.[key];
+  if (!track?.path || !track.packet_index_path) {
+    throw new PrepareMediaAssetsError('prepared asset track missing: ' + key, 'invalid_source_media');
+  }
+  return track;
+}
+
 function execPrepareWithProgress(
   file: string,
   args: string[],
@@ -332,4 +451,95 @@ export async function prepareMediaAssets(
     manifest_path: path.resolve(parsed.manifest_path),
     cache_hit: parsed.cache_hit,
   };
+}
+
+export async function prepareCliInput(
+  request: PrepareCliInputRequest,
+  options: PrepareMediaAssetsOptions = {},
+): Promise<PrepareCliInputResult> {
+  const cacheDir = path.resolve(request.cacheDir);
+  const inputDir = path.join(cacheDir, 'input');
+  const tempOutputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tirtc-devtools-input-prepare-'));
+  cleanManagedDirectory(inputDir);
+
+  try {
+    const prepared = await prepareMediaAssets({
+      source: request.file,
+      outputRoot: tempOutputRoot,
+      overwrite: true,
+    }, options);
+    const manifest = JSON.parse(fs.readFileSync(prepared.manifest_path, 'utf8')) as RuntimeAssetManifest;
+    const audio: Record<string, CliPreparedAudioTrack> = {};
+    const video: Record<string, CliPreparedVideoTrack> = {};
+    const audioTracks: Array<[string, string]> = [
+      ['g711a', 'g711a_16000_1ch_s16'],
+      ['aac', 'aac_16000_1ch_s16'],
+      ['pcm', 'pcm_16000_1ch_s16'],
+    ];
+    const videoTracks: Array<[string, string, string]> = [
+      ['h264', 'h264_annexb', 'h264_annexb'],
+      ['h265', 'h265_annexb', 'h265_annexb'],
+      ['mjpeg', 'mjpeg_jfif', 'mjpeg_jfif'],
+    ];
+
+    for (const [codec, key] of audioTracks) {
+      const track = requireTrack(manifest.audio_tracks, key);
+      const copied = copyPreparedTrack(
+        prepared.assets_dir,
+        inputDir,
+        track,
+        'audio_send.' + codec,
+        'audio_send.' + codec + '.packets.csv',
+      );
+      audio[codec] = {
+        codec,
+        ...copied,
+        sample_rate_hz: track.sample_rate_hz ?? 16000,
+        channels: track.channels ?? 1,
+        bits_per_sample: track.bits_per_sample ?? 16,
+        sample_format: codec === 'pcm' ? 's16le' : 'encoded',
+      };
+    }
+
+    for (const [codec, key, bitstreamFormat] of videoTracks) {
+      const track = requireTrack(manifest.video_tracks, key);
+      const copied = copyPreparedTrack(
+        prepared.assets_dir,
+        inputDir,
+        track,
+        'video_send.' + codec,
+        'video_send.' + codec + '.packets.csv',
+      );
+      video[codec] = {
+        codec,
+        ...copied,
+        bitstream_format: bitstreamFormat,
+        width: track.width ?? 0,
+        height: track.height ?? 0,
+        fps: trackFps(track),
+      };
+    }
+
+    const mediaInput = {
+      schema_version: 1 as const,
+      prepared_at: new Date().toISOString(),
+      source_file: path.resolve(request.file),
+      cache_dir: cacheDir,
+      audio,
+      video,
+    };
+    const mediaInputPath = path.join(inputDir, 'media_input.json');
+    fs.writeFileSync(mediaInputPath, JSON.stringify(mediaInput, null, 2) + '\n');
+    return {
+      cache_dir: cacheDir,
+      input_dir: inputDir,
+      media_input_path: mediaInputPath,
+      media_input: mediaInput,
+    };
+  } catch (error: unknown) {
+    cleanManagedDirectory(inputDir);
+    throw error;
+  } finally {
+    fs.rmSync(tempOutputRoot, {recursive: true, force: true});
+  }
 }

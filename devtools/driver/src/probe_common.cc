@@ -83,6 +83,10 @@ std::optional<bool> get_bool_value(const std::string& text, const std::string& k
   return match[1].str() == "true" || match[1].str() == "1";
 }
 
+std::string fallback_string(std::string value, const std::string& fallback) {
+  return value.empty() ? fallback : value;
+}
+
 std::string get_path_string(const std::string& text, const std::vector<std::string>& path) {
   std::string current = text;
   for (size_t index = 0; index + 1 < path.size(); ++index) {
@@ -120,6 +124,26 @@ bool get_path_bool(const std::string& text, const std::vector<std::string>& path
   }
   auto value = get_bool_value(current, path.back());
   return value.value_or(fallback);
+}
+
+std::string video_media_filename(const std::string& codec) {
+  if (codec == "h265") {
+    return "video_send.h265";
+  }
+  if (codec == "mjpeg") {
+    return "video_send.mjpeg";
+  }
+  return "video_send.h264";
+}
+
+std::string audio_media_filename(const std::string& codec) {
+  if (codec == "pcm") {
+    return "audio_send.pcm";
+  }
+  if (codec == "aac") {
+    return "audio_send.aac";
+  }
+  return "audio_send.g711a";
 }
 
 }  // namespace
@@ -251,8 +275,21 @@ RoleRequest parse_request(const std::string& request_json) {
     request.pairing_id = request.execution_id;
   }
   request.role = get_string_value(request_json, "role").value_or("");
+  request.cache_dir = get_string_value(request_json, "cache_dir").value_or("");
+  request.role_dir = get_string_value(request_json, "role_dir").value_or("");
+  request.input_mode = get_string_value(request_json, "input_mode").value_or("");
+  request.output_mode = fallback_string(get_string_value(request_json, "output_mode").value_or(""),
+                                        get_path_string(request_json, {"output", "mode"}));
+  if (request.output_mode.empty()) {
+    request.output_mode = "file";
+  }
+  request.pairing_mode =
+      fallback_string(get_string_value(request_json, "pairing_mode").value_or(""), "standard");
 
   request.endpoint = get_string_value(request_json, "endpoint").value_or("");
+  request.endpoint_mode =
+      fallback_string(get_string_value(request_json, "endpoint_mode").value_or(""),
+                      request.endpoint.empty() ? "default" : "custom");
   request.remote_id = get_path_string(request_json, {"identity", "device_id"});
   if (request.remote_id.empty()) {
     request.remote_id = get_path_string(request_json, {"identity", "remote_id"});
@@ -284,6 +321,7 @@ RoleRequest parse_request(const std::string& request_json) {
   request.receive_audio_stream_id = get_path_int(
       request_json, {"media", "receive_audio", "stream_id"}, kDefaultReceiveAudioStreamId);
   request.media_source_path = get_path_string(request_json, {"media", "source", "path"});
+  request.media_input_path = get_path_string(request_json, {"media", "media_input_path"});
   request.video_codec = get_path_string(request_json, {"media", "video", "codec"});
   if (request.video_codec.empty()) {
     request.video_codec = "h264";
@@ -300,6 +338,42 @@ RoleRequest parse_request(const std::string& request_json) {
   if (request.output_consumer.empty()) {
     request.output_consumer = "frame_dump";
   }
+  request.audio_input_processing_status =
+      get_path_string(request_json, {"audio_processing", "input", "status"});
+  if (request.audio_input_processing_status.empty()) {
+    request.audio_input_processing_status = "not_requested";
+  }
+  request.audio_input_aec =
+      fallback_string(get_path_string(request_json, {"audio_processing", "input", "requested", "aec"}),
+                      "disabled");
+  request.audio_input_agc =
+      fallback_string(get_path_string(request_json, {"audio_processing", "input", "requested", "agc"}),
+                      "disabled");
+  request.audio_input_ans =
+      fallback_string(get_path_string(request_json, {"audio_processing", "input", "requested", "ans"}),
+                      "disabled");
+  request.audio_input_aec_mode =
+      get_path_int(request_json, {"audio_processing", "input", "runtime", "aec_mode"}, 0);
+  request.audio_input_agc_level =
+      get_path_int(request_json, {"audio_processing", "input", "runtime", "agc_level"}, 0);
+  request.audio_input_ans_level =
+      get_path_int(request_json, {"audio_processing", "input", "runtime", "ans_level"}, 0);
+  request.audio_output_processing_status =
+      get_path_string(request_json, {"audio_processing", "output", "status"});
+  if (request.audio_output_processing_status.empty()) {
+    request.audio_output_processing_status = "not_requested";
+  }
+  request.audio_output_agc =
+      fallback_string(get_path_string(request_json, {"audio_processing", "output", "requested", "agc"}),
+                      "disabled");
+  request.audio_output_ans =
+      fallback_string(get_path_string(request_json, {"audio_processing", "output", "requested", "ans"}),
+                      "disabled");
+  request.audio_output_agc_level =
+      get_path_int(request_json, {"audio_processing", "output", "runtime", "agc_level"}, 0);
+  request.audio_output_ans_level =
+      get_path_int(request_json, {"audio_processing", "output", "runtime", "ans_level"}, 0);
+  request.preview_requested = get_path_bool(request_json, {"preview", "requested"}, false);
   request.frame_limit =
       get_path_int(request_json, {"output", "video", "frame_limit"}, kDefaultFrameLimit);
   request.exit_after_first_session =
@@ -337,6 +411,9 @@ TirtcVideoBitstreamFormat codec_to_bitstream_format(const std::string& codec) {
 }
 
 std::filesystem::path codec_media_path(const std::string& asset_root, const std::string& codec) {
+  if (asset_root_uses_fixed_cache(asset_root)) {
+    return std::filesystem::path(asset_root) / video_media_filename(codec);
+  }
   if (codec == "h265") {
     return std::filesystem::path(asset_root) / "video" / "video.h265";
   }
@@ -347,6 +424,9 @@ std::filesystem::path codec_media_path(const std::string& asset_root, const std:
 }
 
 std::filesystem::path codec_packets_path(const std::string& asset_root, const std::string& codec) {
+  if (asset_root_uses_fixed_cache(asset_root)) {
+    return std::filesystem::path(asset_root) / (video_media_filename(codec) + ".packets.csv");
+  }
   if (codec == "h265") {
     return std::filesystem::path(asset_root) / "video" / "video_h265_packets.csv";
   }
@@ -354,6 +434,10 @@ std::filesystem::path codec_packets_path(const std::string& asset_root, const st
     return std::filesystem::path(asset_root) / "video" / "video_mjpeg_packets.csv";
   }
   return std::filesystem::path(asset_root) / "video" / "video_packets.csv";
+}
+
+bool asset_root_uses_fixed_cache(const std::string& asset_root) {
+  return std::filesystem::exists(std::filesystem::path(asset_root) / "media_input.json");
 }
 
 TirtcMediaCodec audio_codec_to_runtime_codec(const std::string& codec) {
@@ -378,6 +462,11 @@ std::string audio_track_key(const std::string& codec, uint32_t sample_rate_hz, u
 
 std::filesystem::path audio_media_path(const std::string& asset_root, const std::string& codec,
                                        uint32_t sample_rate_hz, uint32_t channels) {
+  if (asset_root_uses_fixed_cache(asset_root)) {
+    (void)sample_rate_hz;
+    (void)channels;
+    return std::filesystem::path(asset_root) / audio_media_filename(codec);
+  }
   std::string extension = ".g711a";
   if (codec == "pcm") {
     extension = ".pcm";
@@ -394,6 +483,11 @@ std::filesystem::path audio_media_path(const std::string& asset_root, const std:
 
 std::filesystem::path audio_packets_path(const std::string& asset_root, const std::string& codec,
                                          uint32_t sample_rate_hz, uint32_t channels) {
+  if (asset_root_uses_fixed_cache(asset_root)) {
+    (void)sample_rate_hz;
+    (void)channels;
+    return std::filesystem::path(asset_root) / (audio_media_filename(codec) + ".packets.csv");
+  }
   return std::filesystem::path(asset_root) / "audio" /
          (audio_track_key(codec, sample_rate_hz, channels) + ".csv");
 }
