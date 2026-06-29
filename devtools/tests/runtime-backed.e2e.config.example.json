@@ -1,6 +1,6 @@
 {
-  "mp4Path": "/Users/allenfeng/Development/Repositories/tirtc-nexus/tirtc-matrix/.refers/simple.mp4",
-  "endpoint": "matrix://runtime-e2e",
+  "mp4Path": "/Users/allenfeng/Development/Repositories/tirtc-nexus/tirtc-av/.refers/simple.mp4",
+  "endpoint": "tirtc-av://runtime-e2e",
   "license": "runtime-license",
   "remoteId": "peer-e2e",
   "streamId": 31,

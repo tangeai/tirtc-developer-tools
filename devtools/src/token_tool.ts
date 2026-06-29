@@ -61,7 +61,7 @@ export type LicenseQrcodeOutput = {
 
 const kAsciiQrQuietZoneModules = 2;
 
-type QrModuleMatrix = {
+type QrModuleGrid = {
   size: number;
   data: Uint8Array;
 };
@@ -212,14 +212,14 @@ function resolveAsciiMaxColumns(explicit?: number): number | undefined {
   return resolveTerminalColumns();
 }
 
-function readQrModuleOrWhite(modules: QrModuleMatrix, row: number, column: number): boolean {
+function readQrModuleOrWhite(modules: QrModuleGrid, row: number, column: number): boolean {
   if (row < 0 || column < 0 || row >= modules.size || column >= modules.size) {
     return false;
   }
   return readQrModule(modules, row, column);
 }
 
-function renderHalfBlockQr(modules: QrModuleMatrix): string {
+function renderHalfBlockQr(modules: QrModuleGrid): string {
   const lines: string[] = [];
   const start = -kAsciiQrQuietZoneModules;
   const end = modules.size + kAsciiQrQuietZoneModules;

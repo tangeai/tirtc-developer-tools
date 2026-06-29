@@ -111,7 +111,7 @@ describe('role driver packaged vendor discovery', () => {
     writeRuntimeBundle(runtimeRoot);
     fs.mkdirSync(assetRoot, {recursive: true});
     fs.writeFileSync(path.join(assetRoot, 'manifest.json'), '{}\n');
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = assetRoot;
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = assetRoot;
 
     jest.doMock('../src/embedded_paths', () => ({
       resolveCliPackageRoot: () => packageRoot,
@@ -154,7 +154,7 @@ describe('role driver packaged vendor discovery', () => {
     writeRuntimeBundle(runtimeRoot);
     fs.mkdirSync(assetRoot, {recursive: true});
     fs.writeFileSync(path.join(assetRoot, 'manifest.json'), '{}\n');
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = assetRoot;
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = assetRoot;
 
     jest.doMock('../src/embedded_paths', () => ({
       resolveCliPackageRoot: () => packageRoot,

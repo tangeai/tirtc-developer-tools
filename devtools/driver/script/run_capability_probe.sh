@@ -4,14 +4,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DRIVER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEVTOOLS_ROOT="$(cd "$DRIVER_ROOT/.." && pwd)"
-if [[ -n "${TIRTC_MATRIX_REPO_ROOT:-}" ]]; then
-  MATRIX_REPO_ROOT="$(cd "$TIRTC_MATRIX_REPO_ROOT" && pwd)"
+if [[ -n "${TIRTC_AV_REPO_ROOT:-}" ]]; then
+  TIRTC_AV_REPO_ROOT="$(cd "$TIRTC_AV_REPO_ROOT" && pwd)"
 else
-  MATRIX_REPO_ROOT="$(cd "$DEVTOOLS_ROOT/../.." && pwd)"
+  TIRTC_AV_REPO_ROOT="$(cd "$DEVTOOLS_ROOT/../.." && pwd)"
 fi
 
 ARTIFACT_ROOT="${DEVTOOLS_DRIVER_PROBE_ARTIFACT_ROOT:-$DEVTOOLS_ROOT/.build/driver-capability-probe}"
-ASSET_ROOT="${MATRIX_ASSET_WORKSPACE_ROOT:-$MATRIX_REPO_ROOT/runtime/assets/.workspace/runtime-assets-current}"
+ASSET_ROOT="${TIRTC_AV_ASSET_WORKSPACE_ROOT:-$TIRTC_AV_REPO_ROOT/runtime/assets/.workspace/runtime-assets-current}"
 PLATFORM="${TIRTC_RUNTIME_PLATFORM:-macos-arm64}"
 RUNTIME_ROOT="${TIRTC_RUNTIME_BUNDLE_ROOT:-$DEVTOOLS_ROOT/3rd/runtime/$PLATFORM}"
 
@@ -37,7 +37,7 @@ mkdir -p "$ARTIFACT_ROOT"
 issue_token() {
   local remote_id="$1"
   local output_file="$2"
-  "$MATRIX_REPO_ROOT/script/issue_devtools_token.sh" \
+  "$TIRTC_AV_REPO_ROOT/script/issue_devtools_token.sh" \
     --remote-id "$remote_id" \
     --endpoint "$TIRTC_ENDPOINT" > "$output_file"
   python3 - "$output_file" <<'PY'
@@ -100,7 +100,7 @@ request = {
     "bootstrap": bootstrap,
     "streams": {"audio_stream_id": 10, "video_stream_id": 11},
     "media": {
-        "source": {"kind": "encoded_asset", "path": os.environ["MATRIX_ASSET_ROOT"]},
+        "source": {"kind": "encoded_asset", "path": os.environ["TIRTC_AV_ASSET_ROOT"]},
         "video": {"codec": codec},
     },
     "output": {"consumer": "frame_dump", "video": {"frame_limit": 1}},
@@ -204,7 +204,7 @@ run_case() {
   local token
   token="$(issue_token "$TIRTC_DEVICE_ID" "$token_json")"
 
-  MATRIX_ASSET_ROOT="$ASSET_ROOT" write_request "device" "$codec" "$token" "$send_root" "$send_request"
+  TIRTC_AV_ASSET_ROOT="$ASSET_ROOT" write_request "device" "$codec" "$token" "$send_root" "$send_request"
 
   "$DRIVER_BIN" \
     --request "$send_request" \
@@ -240,7 +240,7 @@ PY
     return 1
   fi
 
-  MATRIX_ASSET_ROOT="$ASSET_ROOT" write_request \
+  TIRTC_AV_ASSET_ROOT="$ASSET_ROOT" write_request \
     "client" "$codec" "$token" "$receive_root" "$receive_request" "$bootstrap"
 
   local receive_status=0
@@ -314,7 +314,7 @@ request = {
     },
     "streams": {"audio_stream_id": 10, "video_stream_id": 11},
     "media": {
-        "source": {"kind": "system", "path": os.environ["MATRIX_ASSET_ROOT"]},
+        "source": {"kind": "system", "path": os.environ["TIRTC_AV_ASSET_ROOT"]},
         "video": {"codec": "h264"},
         "audio": {"codec": "g711a", "sample_rate_hz": 16000, "channels": 1},
     },
@@ -334,7 +334,7 @@ with open(request_file, "w", encoding="utf-8") as fh:
     fh.write("\n")
 PY
 
-  MATRIX_ASSET_ROOT="$ASSET_ROOT" python3 - "$DRIVER_BIN" "$request_file" "$RUNTIME_ROOT" "$ASSET_ROOT" "$case_root" <<'PY'
+  TIRTC_AV_ASSET_ROOT="$ASSET_ROOT" python3 - "$DRIVER_BIN" "$request_file" "$RUNTIME_ROOT" "$ASSET_ROOT" "$case_root" <<'PY'
 import subprocess
 import sys
 
@@ -376,6 +376,6 @@ for codec in h264 h265 mjpeg; do
 done
 
 echo "[devtools-driver-probe] running system preview lifecycle"
-MATRIX_ASSET_ROOT="$ASSET_ROOT" run_system_preview_lifecycle_case
+TIRTC_AV_ASSET_ROOT="$ASSET_ROOT" run_system_preview_lifecycle_case
 
 echo "[devtools-driver-probe] artifact root: $ARTIFACT_ROOT"

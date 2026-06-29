@@ -89,7 +89,7 @@ DevTools CLI 自身验收：
 npm run test:acceptance
 ```
 
-从 Matrix 仓库根目录执行标准三 codec 真实闭环：
+从 TiRTC AV 仓库根目录执行标准三 codec 真实闭环：
 
 ```sh
 .agents/skills/devtools-cli-send-receive-e2e/scripts/run_devtools_cli_send_receive_e2e.sh

@@ -4,10 +4,10 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CLI_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 RELEASE_REPO=${TIRTC_DEVTOOLS_RELEASE_REPO:-tangeai/tirtc-developer-tools}
-if [[ -n "${TIRTC_MATRIX_REPO_ROOT:-}" ]]; then
-  MATRIX_REPO_ROOT=$(cd "$TIRTC_MATRIX_REPO_ROOT" && pwd)
+if [[ -n "${TIRTC_AV_REPO_ROOT:-}" ]]; then
+  TIRTC_AV_REPO_ROOT=$(cd "$TIRTC_AV_REPO_ROOT" && pwd)
 else
-  MATRIX_REPO_ROOT=$(cd "$CLI_ROOT/../.." && pwd)
+  TIRTC_AV_REPO_ROOT=$(cd "$CLI_ROOT/../.." && pwd)
 fi
 
 resolve_platforms() {
@@ -121,11 +121,11 @@ if [[ -n "${TIRTC_DEVTOOLS_RUNTIME_SDK_DIR:-${TIRTC_RUNTIME_SDK_DIR:-}}" ]]; the
   done
 elif [[ -n "${TIRTC_DEVTOOLS_RUNTIME_SDK_ZIP:-}" ]]; then
   prepare_from_zip "$TIRTC_DEVTOOLS_RUNTIME_SDK_ZIP" "${platforms[@]}"
-elif [[ -x "$MATRIX_REPO_ROOT/runtime/script/prepare_product_runtime.sh" ]]; then
+elif [[ -x "$TIRTC_AV_REPO_ROOT/runtime/script/prepare_product_runtime.sh" ]]; then
   for platform in "${platforms[@]}"; do
-    echo "[devtools runtime] preparing Matrix runtime SDK for $platform..."
-    "$MATRIX_REPO_ROOT/runtime/script/prepare_product_runtime.sh" --platform "$platform"
-    copy_runtime_platform "$MATRIX_REPO_ROOT/.build/products/runtime" "$platform"
+    echo "[devtools runtime] preparing TiRTC AV runtime SDK for $platform..."
+    "$TIRTC_AV_REPO_ROOT/runtime/script/prepare_product_runtime.sh" --platform "$platform"
+    copy_runtime_platform "$TIRTC_AV_REPO_ROOT/.build/products/runtime" "$platform"
   done
 else
   tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/tirtc-devtools-runtime-sdk.XXXXXX")"

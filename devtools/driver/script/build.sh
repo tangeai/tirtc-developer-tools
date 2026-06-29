@@ -88,8 +88,8 @@ if [[ "$PLATFORM" == "linux-x64" && "$host_os" != "Linux" ]]; then
 
   linux_image="${TIRTC_DEVTOOLS_LINUX_BUILD_IMAGE:-}"
   if [[ -z "$linux_image" ]]; then
-    if docker image inspect matrix/linux-build:runtime-release >/dev/null 2>&1; then
-      linux_image="matrix/linux-build:runtime-release"
+    if docker image inspect tirtc-av/linux-build:runtime-release >/dev/null 2>&1; then
+      linux_image="tirtc-av/linux-build:runtime-release"
     else
       linux_image="gcc:13"
     fi

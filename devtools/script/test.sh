@@ -4,8 +4,8 @@ set -euo pipefail
 
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 cli_root="$(CDPATH= cd -- "$script_dir/.." && pwd)"
-if [[ -n "${TIRTC_MATRIX_REPO_ROOT:-}" ]]; then
-  repo_root="$(CDPATH= cd -- "$TIRTC_MATRIX_REPO_ROOT" && pwd)"
+if [[ -n "${TIRTC_AV_REPO_ROOT:-}" ]]; then
+  repo_root="$(CDPATH= cd -- "$TIRTC_AV_REPO_ROOT" && pwd)"
 else
   repo_root="$(CDPATH= cd -- "$script_dir/../../.." && pwd)"
 fi

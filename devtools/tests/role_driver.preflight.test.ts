@@ -251,7 +251,7 @@ describe('role driver preflight failures', () => {
   it('reports missing native driver as a preflight failure', async () => {
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = path.join(tempRoot, 'missing-driver');
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
 
     await expect(runReceiveWithArtifact('missing-driver-artifacts')).resolves.toBe(3);
 
@@ -272,7 +272,7 @@ describe('role driver preflight failures', () => {
   it('reports missing runtime bundle as a preflight failure', async () => {
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeDriver(tempRoot);
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = path.join(tempRoot, 'missing-runtime');
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
 
     await expect(runReceiveWithArtifact('missing-runtime-artifacts')).resolves.toBe(3);
 
@@ -288,7 +288,7 @@ describe('role driver preflight failures', () => {
   it('reports missing prepared assets as a preflight failure', async () => {
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeDriver(tempRoot);
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = path.join(tempRoot, 'missing-assets');
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = path.join(tempRoot, 'missing-assets');
 
     await expect(runReceiveWithArtifact('missing-assets-artifacts')).resolves.toBe(3);
 
@@ -353,7 +353,7 @@ describe('role driver preflight failures', () => {
       0,
     );
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
     const tokenIssuePath = path.join(tempRoot, 'token-issue-opus.json');
     fs.writeFileSync(tokenIssuePath, '{"code":0,"message":"OK","data":{"token":"client-token-secret"}}\n');
 
@@ -379,7 +379,7 @@ describe('role driver preflight failures', () => {
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeDriver(tempRoot);
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
     process.env.TIRTC_RUNTIME_PLATFORM = 'macos-arm64';
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
 
     const artifactRoot = path.join(tempRoot, 'device-receive-audio-stream');
     await expect(runDeviceStart({
@@ -486,7 +486,7 @@ describe('role driver preflight failures', () => {
       0,
     );
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
     const tokenIssuePath = path.join(tempRoot, 'token-issue-amr.json');
     fs.writeFileSync(tokenIssuePath, '{"code":0,"message":"OK","data":{"token":"client-token-secret"}}\n');
 
@@ -530,7 +530,7 @@ describe('role driver preflight failures', () => {
   it('reports a driver exit without summary as an artifact failure', async () => {
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeDriver(tempRoot);
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
 
     await expect(runReceiveWithArtifact('summaryless-driver-artifacts')).resolves.toBe(1);
 
@@ -570,7 +570,7 @@ describe('role driver preflight failures', () => {
       1,
     );
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
 
     await expect(runReceiveWithArtifact('log-upload-summary-artifacts')).resolves.toBe(1);
 
@@ -611,7 +611,7 @@ describe('role driver preflight failures', () => {
     );
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = driverPath;
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = runtimeRoot;
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = assetRoot;
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = assetRoot;
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
 
@@ -692,7 +692,7 @@ describe('role driver preflight failures', () => {
     );
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = driverPath;
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = runtimeRoot;
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = assetRoot;
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = assetRoot;
 
     await expect(
       runClientStart(
@@ -743,7 +743,7 @@ describe('role driver preflight failures', () => {
     );
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = driverPath;
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = runtimeRoot;
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = assetRoot;
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = assetRoot;
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
 
@@ -773,7 +773,7 @@ describe('role driver preflight failures', () => {
     const artifactRoot = path.join(tempRoot, 'device-live-log-artifacts');
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = driverPath;
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = runtimeRoot;
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = assetRoot;
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = assetRoot;
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
 
@@ -876,7 +876,7 @@ describe('role driver preflight failures', () => {
 }`, 0);
     process.env.TIRTC_DEVTOOLS_DRIVER_PATH = driverPath;
     process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
 

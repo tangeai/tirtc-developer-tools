@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 CLI_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 DEVELOPER_TOOLS_ROOT=$(cd "$CLI_ROOT/.." && pwd)
-if [[ -n "${TIRTC_MATRIX_REPO_ROOT:-}" ]]; then
-  REPO_ROOT=$(cd "$TIRTC_MATRIX_REPO_ROOT" && pwd)
+if [[ -n "${TIRTC_AV_REPO_ROOT:-}" ]]; then
+  REPO_ROOT=$(cd "$TIRTC_AV_REPO_ROOT" && pwd)
 elif [[ -x "$CLI_ROOT/../../runtime/script/prepare_product_runtime.sh" ]]; then
   REPO_ROOT=$(cd "$CLI_ROOT/../.." && pwd)
 else

@@ -117,7 +117,7 @@ export function resolveRuntimeRoot(roots: RoleDriverRoots, platform: string): st
 }
 
 export function resolveAssetRoot(roots: RoleDriverRoots): string {
-  const explicit = process.env.MATRIX_ASSET_WORKSPACE_ROOT?.trim();
+  const explicit = process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT?.trim();
   if (explicit) {
     return explicit;
   }
