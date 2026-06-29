@@ -136,14 +136,26 @@ std::string video_media_filename(const std::string& codec) {
   return "video_send.h264";
 }
 
-std::string audio_media_filename(const std::string& codec) {
+std::string audio_media_extension(const std::string& codec) {
   if (codec == "pcm") {
-    return "audio_send.pcm";
+    return ".pcm";
   }
   if (codec == "aac") {
-    return "audio_send.aac";
+    return ".aac";
   }
-  return "audio_send.g711a";
+  if (codec == "opus") {
+    return ".opus";
+  }
+  if (codec == "amr") {
+    return ".amr";
+  }
+  return ".g711a";
+}
+
+std::string fixed_audio_media_filename(const std::string& codec, uint32_t sample_rate_hz,
+                                       uint32_t channels) {
+  return "audio_send." + audio_track_key(codec, sample_rate_hz, channels) +
+         audio_media_extension(codec);
 }
 
 }  // namespace
@@ -463,30 +475,18 @@ std::string audio_track_key(const std::string& codec, uint32_t sample_rate_hz, u
 std::filesystem::path audio_media_path(const std::string& asset_root, const std::string& codec,
                                        uint32_t sample_rate_hz, uint32_t channels) {
   if (asset_root_uses_fixed_cache(asset_root)) {
-    (void)sample_rate_hz;
-    (void)channels;
-    return std::filesystem::path(asset_root) / audio_media_filename(codec);
-  }
-  std::string extension = ".g711a";
-  if (codec == "pcm") {
-    extension = ".pcm";
-  } else if (codec == "aac") {
-    extension = ".aac";
-  } else if (codec == "opus") {
-    extension = ".opus";
-  } else if (codec == "amr") {
-    extension = ".amr";
+    return std::filesystem::path(asset_root) /
+           fixed_audio_media_filename(codec, sample_rate_hz, channels);
   }
   return std::filesystem::path(asset_root) / "audio" /
-         (audio_track_key(codec, sample_rate_hz, channels) + extension);
+         (audio_track_key(codec, sample_rate_hz, channels) + audio_media_extension(codec));
 }
 
 std::filesystem::path audio_packets_path(const std::string& asset_root, const std::string& codec,
                                          uint32_t sample_rate_hz, uint32_t channels) {
   if (asset_root_uses_fixed_cache(asset_root)) {
-    (void)sample_rate_hz;
-    (void)channels;
-    return std::filesystem::path(asset_root) / (audio_media_filename(codec) + ".packets.csv");
+    return std::filesystem::path(asset_root) /
+           (fixed_audio_media_filename(codec, sample_rate_hz, channels) + ".packets.csv");
   }
   return std::filesystem::path(asset_root) / "audio" /
          (audio_track_key(codec, sample_rate_hz, channels) + ".csv");

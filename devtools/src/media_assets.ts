@@ -298,6 +298,53 @@ function requireTrack(
   return track;
 }
 
+function audioTrackKey(codec: string, sampleRateHz: number, channels: number): string {
+  return codec + '_' + String(sampleRateHz) + '_' + String(channels) + 'ch_s16';
+}
+
+function audioFileExtension(codec: string): string {
+  if (codec === 'pcm') {
+    return '.pcm';
+  }
+  if (codec === 'aac') {
+    return '.aac';
+  }
+  if (codec === 'opus') {
+    return '.opus';
+  }
+  if (codec === 'amr') {
+    return '.amr';
+  }
+  return '.g711a';
+}
+
+function audioMediaFileName(codec: string, sampleRateHz: number, channels: number): string {
+  return 'audio_send.' + audioTrackKey(codec, sampleRateHz, channels) + audioFileExtension(codec);
+}
+
+function cliAudioTrackRequests(): Array<{codec: string; key: string; sampleRateHz: number; channels: number}> {
+  const requests: Array<{codec: string; key: string; sampleRateHz: number; channels: number}> = [];
+  for (const codec of ['g711a', 'aac', 'pcm', 'opus']) {
+    for (const sampleRateHz of [8000, 16000]) {
+      for (const channels of [1, 2]) {
+        requests.push({
+          codec,
+          key: audioTrackKey(codec, sampleRateHz, channels),
+          sampleRateHz,
+          channels,
+        });
+      }
+    }
+  }
+  requests.push({
+    codec: 'amr',
+    key: audioTrackKey('amr', 8000, 1),
+    sampleRateHz: 8000,
+    channels: 1,
+  });
+  return requests;
+}
+
 function execPrepareWithProgress(
   file: string,
   args: string[],
@@ -471,33 +518,30 @@ export async function prepareCliInput(
     const manifest = JSON.parse(fs.readFileSync(prepared.manifest_path, 'utf8')) as RuntimeAssetManifest;
     const audio: Record<string, CliPreparedAudioTrack> = {};
     const video: Record<string, CliPreparedVideoTrack> = {};
-    const audioTracks: Array<[string, string]> = [
-      ['g711a', 'g711a_16000_1ch_s16'],
-      ['aac', 'aac_16000_1ch_s16'],
-      ['pcm', 'pcm_16000_1ch_s16'],
-    ];
+    const audioTracks = cliAudioTrackRequests();
     const videoTracks: Array<[string, string, string]> = [
       ['h264', 'h264_annexb', 'h264_annexb'],
       ['h265', 'h265_annexb', 'h265_annexb'],
       ['mjpeg', 'mjpeg_jfif', 'mjpeg_jfif'],
     ];
 
-    for (const [codec, key] of audioTracks) {
-      const track = requireTrack(manifest.audio_tracks, key);
+    for (const request of audioTracks) {
+      const track = requireTrack(manifest.audio_tracks, request.key);
+      const mediaFileName = audioMediaFileName(request.codec, request.sampleRateHz, request.channels);
       const copied = copyPreparedTrack(
         prepared.assets_dir,
         inputDir,
         track,
-        'audio_send.' + codec,
-        'audio_send.' + codec + '.packets.csv',
+        mediaFileName,
+        mediaFileName + '.packets.csv',
       );
-      audio[codec] = {
-        codec,
+      audio[request.key] = {
+        codec: request.codec,
         ...copied,
-        sample_rate_hz: track.sample_rate_hz ?? 16000,
-        channels: track.channels ?? 1,
+        sample_rate_hz: track.sample_rate_hz ?? request.sampleRateHz,
+        channels: track.channels ?? request.channels,
         bits_per_sample: track.bits_per_sample ?? 16,
-        sample_format: codec === 'pcm' ? 's16le' : 'encoded',
+        sample_format: request.codec === 'pcm' ? 's16le' : 'encoded',
       };
     }
 

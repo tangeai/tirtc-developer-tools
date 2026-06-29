@@ -342,9 +342,20 @@ describe('role driver preflight failures', () => {
     });
   });
 
-  it('rejects OPUS audio codec outside the public device contract', async () => {
+  it('accepts OPUS audio codec in the public device contract', async () => {
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
+    process.env.TIRTC_ACCESS_KEY_ID = 'access-key-id';
+    process.env.TIRTC_SECRET_KEY_ID = 'secret-key-id';
+    process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeSummaryDriver(
+      tempRoot,
+      '{"schema_version":1,"execution_id":"opus-audio-test","role":"device","status":"completed","exit_code":0,"reason_code":"ok"}',
+      0,
+    );
+    process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
+    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    const tokenIssuePath = path.join(tempRoot, 'token-issue-opus.json');
+    fs.writeFileSync(tokenIssuePath, '{"code":0,"message":"OK","data":{"token":"client-token-secret"}}\n');
 
     const artifactRoot = path.join(tempRoot, 'device-opus-audio-codec');
     await expect(runDeviceStart({
@@ -353,15 +364,13 @@ describe('role driver preflight failures', () => {
       audioCodec: 'opus',
       audioSampleRate: '16000',
       audioChannels: '2',
-    }, {json: true})).resolves.toBe(2);
+      clientTokenJson: tokenIssuePath,
+    }, {json: true})).resolves.toBe(0);
 
-    expect(lastEnvelope().data).toMatchObject({
-      status: 'failed',
-      exit_code: 2,
-      role: 'device',
-      reason_code: 'audio_codec_unsupported',
-      failed_stage: 'config',
-    });
+    const request = JSON.parse(
+      fs.readFileSync(path.join(artifactRoot, 'request.redacted.json'), 'utf8'),
+    ) as {media: {audio: {codec: string; sample_rate_hz: number; channels: number}}};
+    expect(request.media.audio).toEqual({codec: 'opus', sample_rate_hz: 16000, channels: 2});
   });
 
   it('adds receive audio stream id to device request preflight', async () => {
@@ -466,7 +475,38 @@ describe('role driver preflight failures', () => {
     });
   });
 
-  it('rejects AMR audio codec outside the public device contract', async () => {
+  it('accepts AMR-NB mono audio codec in the public device contract', async () => {
+    process.env.TIRTC_DEVICE_ID = 'server-device-id';
+    process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
+    process.env.TIRTC_ACCESS_KEY_ID = 'access-key-id';
+    process.env.TIRTC_SECRET_KEY_ID = 'secret-key-id';
+    process.env.TIRTC_DEVTOOLS_DRIVER_PATH = makeSummaryDriver(
+      tempRoot,
+      '{"schema_version":1,"execution_id":"amr-audio-test","role":"device","status":"completed","exit_code":0,"reason_code":"ok"}',
+      0,
+    );
+    process.env.TIRTC_RUNTIME_BUNDLE_ROOT = makeRuntimeRoot(tempRoot);
+    process.env.MATRIX_ASSET_WORKSPACE_ROOT = makeAssetRoot(tempRoot);
+    const tokenIssuePath = path.join(tempRoot, 'token-issue-amr.json');
+    fs.writeFileSync(tokenIssuePath, '{"code":0,"message":"OK","data":{"token":"client-token-secret"}}\n');
+
+    const artifactRoot = path.join(tempRoot, 'device-valid-amr-audio-format');
+    await expect(runDeviceStart({
+      artifactRoot,
+      source: makeAssetRoot(tempRoot),
+      audioCodec: 'amr',
+      audioSampleRate: '8000',
+      audioChannels: '1',
+      clientTokenJson: tokenIssuePath,
+    }, {json: true})).resolves.toBe(0);
+
+    const request = JSON.parse(
+      fs.readFileSync(path.join(artifactRoot, 'request.redacted.json'), 'utf8'),
+    ) as {media: {audio: {codec: string; sample_rate_hz: number; channels: number}}};
+    expect(request.media.audio).toEqual({codec: 'amr', sample_rate_hz: 8000, channels: 1});
+  });
+
+  it('rejects AMR audio formats outside AMR-NB mono', async () => {
     process.env.TIRTC_DEVICE_ID = 'server-device-id';
     process.env.TIRTC_DEVICE_SECRET_KEY = 'device-secret';
 
@@ -482,7 +522,7 @@ describe('role driver preflight failures', () => {
       status: 'failed',
       exit_code: 2,
       role: 'device',
-      reason_code: 'audio_codec_unsupported',
+      reason_code: 'audio_format_unsupported',
       failed_stage: 'config',
     });
   });

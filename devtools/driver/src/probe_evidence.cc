@@ -684,7 +684,6 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
   const bool receive_role = is_receive_role(context->request);
   const bool fixed_cache_input =
       !context->asset_root.empty() && asset_root_uses_fixed_cache(context->asset_root);
-
   if (context->request.schema_version != kRequestSchemaVersion) {
     *out_reason = "schema_incompatible";
   } else if (!is_safe_execution_id(context->request.execution_id)) {
@@ -714,10 +713,6 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
               context->request.audio_codec != "aac" && context->request.audio_codec != "opus" &&
               context->request.audio_codec != "amr")) {
     *out_reason = "audio_codec_unsupported";
-  } else if (device_role && fixed_cache_input &&
-             (context->request.audio_sample_rate_hz != 16000 ||
-              context->request.audio_channels != 1)) {
-    *out_reason = "audio_format_unsupported";
   } else if (device_role && (context->request.audio_sample_rate_hz != 8000 &&
                              context->request.audio_sample_rate_hz != 16000)) {
     *out_reason = "audio_format_unsupported";

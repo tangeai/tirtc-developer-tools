@@ -106,11 +106,14 @@ void test_fixed_cache_media_paths(const std::filesystem::path& root) {
              input_root / "video_send.mjpeg.packets.csv",
          "fixed cache mjpeg packet path");
   expect(devtools_driver_probe::audio_media_path(input_root.string(), "g711a", 16000, 1) ==
-             input_root / "audio_send.g711a",
+             input_root / "audio_send.g711a_16000_1ch_s16.g711a",
          "fixed cache g711a media path");
-  expect(devtools_driver_probe::audio_packets_path(input_root.string(), "aac", 16000, 1) ==
-             input_root / "audio_send.aac.packets.csv",
-         "fixed cache aac packet path");
+  expect(devtools_driver_probe::audio_media_path(input_root.string(), "opus", 16000, 2) ==
+             input_root / "audio_send.opus_16000_2ch_s16.opus",
+         "fixed cache opus media path");
+  expect(devtools_driver_probe::audio_packets_path(input_root.string(), "amr", 8000, 1) ==
+             input_root / "audio_send.amr_8000_1ch_s16.amr.packets.csv",
+         "fixed cache amr packet path");
 }
 
 void test_system_av_io_request_parse() {

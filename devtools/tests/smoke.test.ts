@@ -114,7 +114,7 @@ describe('tirtc-devtools-cli smoke test', () => {
     expect(output).toContain('--preview');
     expect(output).toContain('--video-codec <codec>');
     expect(output).toContain('--audio-codec <codec>');
-    expect(output).toContain('g711a|aac|pcm');
+    expect(output).toContain('g711a|aac|pcm|opus|amr');
     expect(output).toContain('--audio-sample-rate <hz>');
     expect(output).toContain('--audio-channels <count>');
     expect(output).toContain('--audio-input-aec <mode>');

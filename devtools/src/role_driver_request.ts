@@ -55,6 +55,9 @@ type AudioProcessingRequest = {
   };
 };
 
+const supportedAudioCodecs = ['g711a', 'aac', 'pcm', 'opus', 'amr'] as const;
+type SupportedAudioCodec = typeof supportedAudioCodecs[number];
+
 function parsePositiveInt(raw: string | undefined, fallback: number, name: string): number {
   if (raw === undefined) {
     return fallback;
@@ -188,10 +191,10 @@ function codecOrDefault(raw?: string): string {
 
 function audioCodecOrDefault(raw?: string): string {
   const codec = raw?.trim() || 'g711a';
-  if (codec !== 'pcm' && codec !== 'g711a' && codec !== 'aac') {
+  if (!supportedAudioCodecs.includes(codec as SupportedAudioCodec)) {
     throw roleUsageReasonError(
       'audio_codec_unsupported',
-      'audio-codec must be pcm, g711a, or aac',
+      'audio-codec must be g711a, aac, pcm, opus, or amr',
     );
   }
   return codec;
@@ -217,8 +220,11 @@ function audioChannelsOrDefault(raw?: string | number): number {
 }
 
 function validateAudioFormat(codec: string, sampleRateHz: number, channels: number): void {
-  if (codec && sampleRateHz && channels) {
-    return;
+  if (codec === 'amr' && (sampleRateHz !== 8000 || channels !== 1)) {
+    throw roleUsageReasonError(
+      'audio_format_unsupported',
+      'amr audio requires --audio-sample-rate 8000 and --audio-channels 1',
+    );
   }
 }
 
@@ -365,19 +371,30 @@ function readMediaInput(cacheDir: string): Record<string, unknown> {
 function mediaInputHasTrack(
   mediaInput: Record<string, unknown>,
   family: 'audio' | 'video',
-  codec: string,
+  key: string,
 ): boolean {
   const familyValue = mediaInput[family];
   if (typeof familyValue !== 'object' || familyValue === null) {
     return false;
   }
-  const track = (familyValue as Record<string, unknown>)[codec];
+  const track = (familyValue as Record<string, unknown>)[key];
   return typeof track === 'object' && track !== null;
 }
 
-function assertPreparedInput(cacheDir: string, videoCodec: string, audioCodec: string): void {
+function audioTrackKey(codec: string, sampleRateHz: number, channels: number): string {
+  return codec + '_' + String(sampleRateHz) + '_' + String(channels) + 'ch_s16';
+}
+
+function assertPreparedInput(
+  cacheDir: string,
+  videoCodec: string,
+  audioCodec: string,
+  sampleRateHz: number,
+  channels: number,
+): void {
   const mediaInput = readMediaInput(cacheDir);
-  if (!mediaInputHasTrack(mediaInput, 'video', videoCodec) || !mediaInputHasTrack(mediaInput, 'audio', audioCodec)) {
+  const audioKey = audioTrackKey(audioCodec, sampleRateHz, channels);
+  if (!mediaInputHasTrack(mediaInput, 'video', videoCodec) || !mediaInputHasTrack(mediaInput, 'audio', audioKey)) {
     throw rolePreflightError('input_codec_missing', 'fixed input cache does not contain requested codec');
   }
 }
@@ -469,7 +486,7 @@ export async function buildDeviceRequest(
   );
   validateAudioFormat(audioCodec, audioSampleRateHz, audioChannels);
   if (!options.source && inputMode === 'file') {
-    assertPreparedInput(resolveCacheDir(options.cacheDir), codec, audioCodec);
+    assertPreparedInput(resolveCacheDir(options.cacheDir), codec, audioCodec, audioSampleRateHz, audioChannels);
   }
   const executionId = 'cli-device-' + codec + '-' + executionSuffix();
   const caseId = 'devtools-cli-device.' + codec;

@@ -98,9 +98,10 @@ printf '%s\\n' '{"code":0,"message":"OK","data":{"token":"client-token-secret"}}
 
 function writePreparedInput(cacheDir: string): void {
   const inputDir = path.join(cacheDir, 'input');
+  const audioFileName = 'audio_send.g711a_16000_1ch_s16.g711a';
   fs.mkdirSync(inputDir, {recursive: true});
-  fs.writeFileSync(path.join(inputDir, 'audio_send.g711a'), 'audio');
-  fs.writeFileSync(path.join(inputDir, 'audio_send.g711a.packets.csv'), 'pts_us,offset,size\n0,0,5\n');
+  fs.writeFileSync(path.join(inputDir, audioFileName), 'audio');
+  fs.writeFileSync(path.join(inputDir, audioFileName + '.packets.csv'), 'pts_us,offset,size\n0,0,5\n');
   fs.writeFileSync(path.join(inputDir, 'video_send.h264'), 'video');
   fs.writeFileSync(
     path.join(inputDir, 'video_send.h264.packets.csv'),
@@ -112,10 +113,10 @@ function writePreparedInput(cacheDir: string): void {
     source_file: '/tmp/source.mp4',
     cache_dir: cacheDir,
     audio: {
-      g711a: {
+      g711a_16000_1ch_s16: {
         codec: 'g711a',
-        path: 'input/audio_send.g711a',
-        packet_index_path: 'input/audio_send.g711a.packets.csv',
+        path: 'input/' + audioFileName,
+        packet_index_path: 'input/' + audioFileName + '.packets.csv',
         sample_rate_hz: 16000,
         channels: 1,
         bits_per_sample: 16,

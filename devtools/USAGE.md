@@ -163,7 +163,7 @@ tirtc-devtools-cli --json device start \
 - `--output file|system|both`：默认 `file`；`system` 当前只支持 macOS。
 - `--preview`：只对 `--input system` 合法。
 - `--video-codec h264|h265|mjpeg`：默认 `h264`。
-- `--audio-codec g711a|aac|pcm`：默认 `g711a`。
+- `--audio-codec g711a|aac|pcm|opus|amr`：默认 `g711a`；`amr` 当前按 AMR-NB 处理，只支持 `8000` Hz、单声道。
 - `--audio-sample-rate 8000|16000`：默认 `16000`。
 - `--audio-channels 1|2`：默认 `1`。
 - `--duration-ms <ms>`：默认 `0`，表示持续运行到信号或失败。
