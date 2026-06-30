@@ -30,6 +30,7 @@ void on_video_output_error(TirtcVideoOutput* output, TirtcError error,
 
 bool load_headless_audio_capture(AudioCaptureContext* context);
 bool load_headless_frame_dump(FrameDumpContext* context);
+void pump_platform_events_once();
 bool wait_until(int timeout_ms, const std::function<bool()>& predicate);
 void cleanup_receive(TirtcConn* connection, TirtcAudioOutput* audio_output,
                      TirtcVideoOutput* video_output, TirtcAudioAout* aout, TirtcVideoVout* vout);

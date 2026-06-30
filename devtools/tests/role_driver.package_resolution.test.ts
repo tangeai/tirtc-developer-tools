@@ -59,7 +59,7 @@ function writeRuntimeBundle(runtimeRoot: string): void {
   fs.mkdirSync(path.join(runtimeRoot, 'lib'), {recursive: true});
   fs.writeFileSync(path.join(runtimeRoot, 'manifest.txt'), 'ok\n');
   fs.writeFileSync(path.join(runtimeRoot, 'include', 'tirtc', 'av.h'), '/* test */\n');
-  fs.writeFileSync(path.join(runtimeRoot, 'lib', 'libmatrix_runtime_facade.a'), '');
+  fs.writeFileSync(path.join(runtimeRoot, 'lib', 'libtirtc_av.so'), '');
 }
 
 describe('role driver packaged vendor discovery', () => {
@@ -111,7 +111,7 @@ describe('role driver packaged vendor discovery', () => {
     writeRuntimeBundle(runtimeRoot);
     fs.mkdirSync(assetRoot, {recursive: true});
     fs.writeFileSync(path.join(assetRoot, 'manifest.json'), '{}\n');
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = assetRoot;
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = assetRoot;
 
     jest.doMock('../src/embedded_paths', () => ({
       resolveCliPackageRoot: () => packageRoot,
@@ -154,7 +154,7 @@ describe('role driver packaged vendor discovery', () => {
     writeRuntimeBundle(runtimeRoot);
     fs.mkdirSync(assetRoot, {recursive: true});
     fs.writeFileSync(path.join(assetRoot, 'manifest.json'), '{}\n');
-    process.env.MATRIX_ASSET_WORKSPACE_ROOT = assetRoot;
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = assetRoot;
 
     jest.doMock('../src/embedded_paths', () => ({
       resolveCliPackageRoot: () => packageRoot,

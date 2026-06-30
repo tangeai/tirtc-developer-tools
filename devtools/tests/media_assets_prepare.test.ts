@@ -2,10 +2,39 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import {prepareMediaAssets} from '../src/media_assets';
+import {prepareCliInput, prepareMediaAssets} from '../src/media_assets';
 
 function mktempRoot(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function audioExtension(codec: string): string {
+  if (codec === 'pcm') {
+    return '.pcm';
+  }
+  if (codec === 'aac') {
+    return '.aac';
+  }
+  if (codec === 'opus') {
+    return '.opus';
+  }
+  if (codec === 'amr') {
+    return '.amr';
+  }
+  return '.g711a';
+}
+
+function expectedAudioKeys(): string[] {
+  const keys: string[] = [];
+  for (const codec of ['g711a', 'aac', 'pcm', 'opus']) {
+    for (const sampleRateHz of [8000, 16000]) {
+      for (const channels of [1, 2]) {
+        keys.push(`${codec}_${sampleRateHz}_${channels}ch_s16`);
+      }
+    }
+  }
+  keys.push('amr_8000_1ch_s16');
+  return keys;
 }
 
 describe('media assets prepare contract', () => {
@@ -164,5 +193,101 @@ describe('media assets prepare contract', () => {
       'checking source media streams',
       'encoding h264 video track',
     ]);
+  });
+
+  it('prepares fixed CLI input for every public file audio format', async () => {
+    const sourceRoot = mktempRoot('cli-input-source-');
+    const cacheDir = mktempRoot('cli-input-cache-');
+    const sourcePath = path.join(sourceRoot, 'input.mp4');
+    fs.writeFileSync(sourcePath, 'fake-mp4');
+
+    const result = await prepareCliInput(
+      {
+        file: sourcePath,
+        cacheDir,
+      },
+      {
+        repoRoot: path.resolve(__dirname, '../../..'),
+        execFile: async (_file, args) => {
+          const outputRoot = args[args.indexOf('--output-root') + 1];
+          const assetsDir = path.join(outputRoot, 'assets-id');
+          fs.mkdirSync(path.join(assetsDir, 'audio'), {recursive: true});
+          fs.mkdirSync(path.join(assetsDir, 'video'), {recursive: true});
+
+          const audioTracks: Record<string, unknown> = {};
+          for (const key of expectedAudioKeys()) {
+            const [codec, sampleRateText, channelsText] = key.split('_');
+            const channels = Number(channelsText.replace('ch', ''));
+            const mediaPath = path.join('audio', key + audioExtension(codec));
+            const packetPath = path.join('audio', key + '.csv');
+            fs.writeFileSync(path.join(assetsDir, mediaPath), 'audio-' + key);
+            fs.writeFileSync(path.join(assetsDir, packetPath), 'pts_us,offset,size\n0,0,5\n');
+            audioTracks[key] = {
+              codec,
+              path: mediaPath,
+              packet_index_path: packetPath,
+              sample_rate_hz: Number(sampleRateText),
+              channels,
+              bits_per_sample: 16,
+            };
+          }
+
+          const videoTracks: Record<string, unknown> = {};
+          for (const [codec, key, ext] of [
+            ['h264', 'h264_annexb', '.h264'],
+            ['h265', 'h265_annexb', '.h265'],
+            ['mjpeg', 'mjpeg_jfif', '.mjpeg'],
+          ]) {
+            const mediaPath = path.join('video', key + ext);
+            const packetPath = path.join('video', key + '.csv');
+            fs.writeFileSync(path.join(assetsDir, mediaPath), 'video-' + codec);
+            fs.writeFileSync(
+              path.join(assetsDir, packetPath),
+              'pts_us,offset,size,is_key_frame\n0,0,5,1\n',
+            );
+            videoTracks[key] = {
+              codec,
+              path: mediaPath,
+              packet_index_path: packetPath,
+              width: 1280,
+              height: 720,
+              fps: 15,
+            };
+          }
+
+          const manifestPath = path.join(assetsDir, 'manifest.json');
+          fs.writeFileSync(
+            manifestPath,
+            JSON.stringify({audio_tracks: audioTracks, video_tracks: videoTracks}, null, 2) + '\n',
+          );
+          return {
+            stdout: JSON.stringify({
+              assets_dir: assetsDir,
+              manifest_path: manifestPath,
+              cache_hit: false,
+            }),
+          };
+        },
+      },
+    );
+
+    expect(Object.keys(result.media_input.audio).sort()).toEqual(expectedAudioKeys().sort());
+    expect(result.media_input.audio.opus_16000_2ch_s16).toMatchObject({
+      codec: 'opus',
+      path: 'input/audio_send.opus_16000_2ch_s16.opus',
+      packet_index_path: 'input/audio_send.opus_16000_2ch_s16.opus.packets.csv',
+      sample_rate_hz: 16000,
+      channels: 2,
+    });
+    expect(result.media_input.audio.amr_8000_1ch_s16).toMatchObject({
+      codec: 'amr',
+      path: 'input/audio_send.amr_8000_1ch_s16.amr',
+      packet_index_path: 'input/audio_send.amr_8000_1ch_s16.amr.packets.csv',
+      sample_rate_hz: 8000,
+      channels: 1,
+    });
+    expect(result.media_input.audio).not.toHaveProperty('amr_16000_1ch_s16');
+    expect(fs.existsSync(path.join(result.input_dir, 'audio_send.opus_16000_2ch_s16.opus'))).toBe(true);
+    expect(fs.existsSync(path.join(result.input_dir, 'audio_send.amr_8000_1ch_s16.amr'))).toBe(true);
   });
 });

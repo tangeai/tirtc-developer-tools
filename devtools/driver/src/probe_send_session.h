@@ -22,6 +22,10 @@ struct SendAssets {
   int64_t asset_cycle_duration_us = 0;
 };
 
+bool validate_audio_packet_index(const std::filesystem::path& audio_path,
+                                 const std::string& audio_codec, uint32_t sample_rate_hz,
+                                 uint32_t channels, const std::vector<PacketEntry>& packets);
+
 bool prepare_send_assets(DriverContext* context, SendAssets* assets, std::string* reason_code,
                          std::string* event_kind);
 

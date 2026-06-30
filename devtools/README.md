@@ -2,6 +2,8 @@
 
 `devtools/` 是 `tirtc-devtools-cli` 的源码目录。这里说明 CLI 如何从源码构建、验证和打包；具体命令使用方式请看开发者文档和 [USAGE.md](USAGE.md)。
 
+当前公开角色入口使用固定 CLI 工作区：`input prepare --file` 准备 `cache/tirtc-devtools/input/`，`device start --input file|system --output file|system|both` 写出 `device/bootstrap.json` 和 role evidence，`client start --bootstrap ... --output file|system|both` 消费 bootstrap 并写出 `client/output/`。
+
 ## 目录
 
 | 目录 | 作用 |
@@ -80,6 +82,18 @@ npm run test:package
 ```
 
 需要真实 TiRTC 链路时，先按 `tests/runtime-backed.e2e.config.example.json` 准备本地配置，再运行对应 e2e 脚本。
+
+DevTools CLI 自身验收：
+
+```sh
+npm run test:acceptance
+```
+
+从 TiRTC AV 仓库根目录执行标准三 codec 真实闭环：
+
+```sh
+.agents/skills/devtools-cli-send-receive-e2e/scripts/run_devtools_cli_send_receive_e2e.sh
+```
 
 ## 打包
 
