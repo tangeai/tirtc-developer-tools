@@ -145,8 +145,8 @@ export function startRoleLiveLog(options: RoleLiveLogOptions): RoleLiveLogHandle
       ' artifact_root=' + options.artifactRoot,
   );
   log('source=' + sourcePath + ' runtime_root=' + options.runtimeRoot);
-  if (durationMs === undefined) {
-    log('resident mode enabled; waiting for client connections until the process is stopped');
+  if (durationMs === undefined || durationMs === 0) {
+    log('interactive mode enabled; waiting for client connections until the process is stopped');
   } else {
     log('bounded mode enabled duration=' + formatDurationMs(durationMs));
   }

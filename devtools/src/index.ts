@@ -161,7 +161,9 @@ input.command('prepare')
     .option('--cache-dir <dir>', 'CLI 工作区根目录', path.join('cache', 'tirtc-devtools'))
     .addHelpText('after', `
 Examples:
-  $ tirtc-devtools-cli --json input prepare --file ./movie.mp4
+  $ mkdir -p .build/tirtc-source
+  $ curl -L https://download.tangeopen.com/TIRTC_OPEN_DOC/assets/sea.mp4 -o .build/tirtc-source/sea.mp4
+  $ tirtc-devtools-cli --json input prepare --file .build/tirtc-source/sea.mp4
   $ tirtc-devtools-cli --json device start --input file
 `)
     .action((commandOptions: {file?: string; cacheDir?: string}) => {
@@ -175,7 +177,7 @@ assets.command('prepare')
     .option('--output-root <dir>', 'prepared assets 输出根目录')
     .addHelpText('after', `
 Examples:
-  $ tirtc-devtools-cli --json assets prepare --source ./movie.mp4 --output-root .build/tirtc-assets
+  $ tirtc-devtools-cli --json assets prepare --source .build/tirtc-source/sea.mp4 --output-root .build/tirtc-assets
   $ tirtc-devtools-cli --json device start --source .build/tirtc-assets/manifest.json --video-codec h264
 `)
     .action((commandOptions: {source?: string; outputRoot?: string}) => {
@@ -212,7 +214,7 @@ device.command('start')
     .addOption(new Option('--client-token-json <path>', 'legacy token issue --json 输出文件').hideHelp())
     .addHelpText('after', `
 Examples:
-  $ tirtc-devtools-cli --json input prepare --file ./movie.mp4
+  $ tirtc-devtools-cli --json input prepare --file .build/tirtc-source/sea.mp4
   $ tirtc-devtools-cli --json device start --input file --output file
   $ tirtc-devtools-cli --json device start --input system --preview --output both
 

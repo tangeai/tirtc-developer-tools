@@ -56,7 +56,7 @@ driver 只认 request schema，不直接解析公开 CLI 参数。
 - **只走 public facade**：driver 通过 runtime public C headers 接入，不为了排障或便捷打穿 internal header。
 - **证据先行**：关键阶段必须有 `events.jsonl` 和 `summary.json` 可还原；正常高频收包 / 渲染路径不逐包刷日志。
 - **资源成对**：`create / start / attach / subscribe` 必须有对应 `destroy / stop / detach / unsubscribe`；失败、超时、signal 和重复清理都要成立。
-- **输出语义清楚**：`file` 保存远端原始媒体；`system` 输出到系统设备；`both` 两边都必须满足验收。
+- **输出语义清楚**：`file` 保存远端原始媒体；`system` 输出到系统设备；`both` 在受控验收中两边都必须满足；无时长的交互式 device 模拟场景会保持等待客户端对讲音频，不把暂未收到对讲音频判成进程失败。
 - **平台不静默回退**：macOS 承接 system I/O；Linux 当前只承接 file 输入 / 输出；请求不支持能力必须失败并给稳定 `reason_code`。
 - **command echo 是对端能力**：driver 对收到的每条 command 都原样 echo 同一个 command id 和 payload；具体 probe id 由调用方自己选择。
 - **role 文件不继续无限膨胀**：新增共享逻辑优先下沉到 helper / evidence / session owner；新增稳定职责再拆新文件。

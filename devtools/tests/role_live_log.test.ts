@@ -65,4 +65,30 @@ describe('role live log', () => {
     expect(joined).toContain('[device] listener ready; waiting for client connections');
     expect(joined).toContain('[device] no client connected before stop reason=duration_elapsed');
   });
+
+  it('reports duration zero as interactive mode', () => {
+    const emitted: string[] = [];
+    const handle = startRoleLiveLog({
+      role: 'device',
+      artifactRoot: tempRoot,
+      runtimeRoot: path.join(tempRoot, 'runtime'),
+      assetRoot: path.join(tempRoot, 'assets'),
+      pollIntervalMs: 60000,
+      heartbeatIntervalMs: 60000,
+      emit: (message) => {
+        emitted.push(message);
+      },
+      request: {
+        endpoint: 'https://example.invalid',
+        identity: {device_id: 'device-live-log-test'},
+        media: {source: {path: path.join(tempRoot, 'assets')}, video: {codec: 'h264'}},
+        run: {duration_ms: 0},
+      },
+    });
+    handle.stop();
+
+    expect(emitted.join('\n')).toContain(
+      '[device] interactive mode enabled; waiting for client connections until the process is stopped',
+    );
+  });
 });

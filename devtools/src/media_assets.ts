@@ -460,6 +460,10 @@ export async function prepareMediaAssets(
   if (!fs.existsSync(scriptPath)) {
     throw new Error('media assets prepare backend missing: ' + scriptPath);
   }
+  const audioHelperPath = path.join(path.dirname(scriptPath), 'prepare_runtime_audio_tracks.sh');
+  if (!fs.existsSync(audioHelperPath)) {
+    throw new Error('media assets prepare helper missing: ' + audioHelperPath);
+  }
 
   const ensureFfmpegScriptPath = resolveCliScriptPath(__dirname, 'script/ensure_ffmpeg.sh');
   if (!fs.existsSync(ensureFfmpegScriptPath)) {

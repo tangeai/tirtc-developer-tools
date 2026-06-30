@@ -314,6 +314,7 @@ describe('role driver public contract preflight', () => {
 
   it('enables remote audio receive for system-input device runs', async () => {
     process.env.TIRTC_RUNTIME_PLATFORM = 'macos-arm64';
+    process.env.TIRTC_AV_ASSET_WORKSPACE_ROOT = path.join(tempRoot, 'missing-system-assets');
 
     await expect(runDeviceStart({
       cacheDir,
@@ -324,8 +325,12 @@ describe('role driver public contract preflight', () => {
 
     const requestPath = path.join(cacheDir, 'device', 'request.redacted.json');
     const request = JSON.parse(fs.readFileSync(requestPath, 'utf-8')) as {
-      media?: {receive_audio?: {enabled?: boolean; stream_id?: number}};
+      media?: {
+        source?: {kind?: string; path?: string};
+        receive_audio?: {enabled?: boolean; stream_id?: number};
+      };
     };
+    expect(request.media?.source).toMatchObject({kind: 'system', path: ''});
     expect(request.media?.receive_audio).toMatchObject({enabled: true, stream_id: 14});
   });
 });

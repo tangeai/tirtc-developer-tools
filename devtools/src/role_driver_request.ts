@@ -511,6 +511,7 @@ export async function buildDeviceRequest(
   const cacheDir = resolveCacheDir(options.cacheDir);
   const mediaSourcePath = options.source ??
     (inputMode === 'file' ? path.join(cacheDir, 'input') : '');
+  const sourcePath = inputMode === 'file' ? mediaSourcePath || resolveAssetRoot(roots) : mediaSourcePath;
   const receiveAudioEnabled = inputMode === 'system' || options.receiveAudioStreamId !== undefined;
   return {
     schema_version: 1,
@@ -535,7 +536,7 @@ export async function buildDeviceRequest(
       video_stream_id: defaultVideoStreamId,
     },
     media: {
-      source: {kind: inputMode === 'file' ? 'fixed_cache' : 'system', path: mediaSourcePath || resolveAssetRoot(roots)},
+      source: {kind: inputMode === 'file' ? 'fixed_cache' : 'system', path: sourcePath},
       media_input_path: inputMode === 'file' ? mediaInputPath(cacheDir) : null,
       video: {codec},
       audio: {

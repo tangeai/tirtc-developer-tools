@@ -205,6 +205,38 @@ void test_system_device_receive_audio_request_parse() {
   expect(request.receive_audio_enabled, "device receive audio enabled parsed");
   expect(request.receive_audio_stream_id == 14, "device receive audio stream parsed");
   expect(request.preview_requested, "preview request parsed");
+  expect(!devtools_driver_probe::device_receive_audio_observation_required(request),
+         "interactive system device receive audio is optional");
+}
+
+void test_device_receive_audio_observation_policy() {
+  devtools_driver_probe::RoleRequest interactive{};
+  interactive.role = "device";
+  interactive.receive_audio_enabled = true;
+  interactive.duration_ms = 0;
+  interactive.exit_after_first_session = false;
+  expect(!devtools_driver_probe::device_receive_audio_observation_required(interactive),
+         "interactive device receive audio observation is not required");
+
+  devtools_driver_probe::RoleRequest bounded = interactive;
+  bounded.duration_ms = 15000;
+  expect(devtools_driver_probe::device_receive_audio_observation_required(bounded),
+         "bounded device receive audio observation is required");
+
+  devtools_driver_probe::RoleRequest exit_after_first_session = interactive;
+  exit_after_first_session.exit_after_first_session = true;
+  expect(devtools_driver_probe::device_receive_audio_observation_required(exit_after_first_session),
+         "exit-after-first-session device receive audio observation is required");
+
+  devtools_driver_probe::RoleRequest disabled = bounded;
+  disabled.receive_audio_enabled = false;
+  expect(!devtools_driver_probe::device_receive_audio_observation_required(disabled),
+         "disabled receive audio observation is not required");
+
+  devtools_driver_probe::RoleRequest client = bounded;
+  client.role = "client";
+  expect(!devtools_driver_probe::device_receive_audio_observation_required(client),
+         "client role does not use device receive audio observation policy");
 }
 
 }  // namespace
@@ -216,6 +248,7 @@ int main() {
   test_fixed_cache_media_paths(root);
   test_system_av_io_request_parse();
   test_system_device_receive_audio_request_parse();
+  test_device_receive_audio_observation_policy();
   std::filesystem::remove_all(root);
   return 0;
 }

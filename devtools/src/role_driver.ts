@@ -136,6 +136,12 @@ function spawnDriverProcess(
   });
 }
 
+function requestRequiresAssetRoot(request: Record<string, unknown>): boolean {
+  const role = typeof request.role === 'string' ? request.role : '';
+  const inputMode = typeof request.input_mode === 'string' ? request.input_mode : '';
+  return !((role === 'device' || role === 'send') && inputMode === 'system');
+}
+
 async function runDriver(
   role: 'device' | 'client',
   request: Record<string, unknown>,
@@ -162,7 +168,7 @@ async function runDriver(
   if (!hasRuntimeBundle(runtimeRoot, platform)) {
     throw rolePreflightError('runtime_bundle_missing', runtimeRoot);
   }
-  if (!hasDriverAssetRoot(assetRoot)) {
+  if (requestRequiresAssetRoot(request) && !hasDriverAssetRoot(assetRoot)) {
     throw rolePreflightError('asset_missing', assetRoot);
   }
 

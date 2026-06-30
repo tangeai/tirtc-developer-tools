@@ -5,6 +5,7 @@ import path from 'path';
 import {
   resolveCliPackageRoot,
   resolveEmbeddedRoot,
+  resolveEmbeddedRuntimeScript,
   resolveWorkspaceRepoRoot,
 } from '../src/embedded_paths';
 
@@ -34,5 +35,30 @@ describe('embedded paths', () => {
     expect(resolveCliPackageRoot(srcDir)).toBe(packageRoot);
     expect(resolveWorkspaceRepoRoot(srcDir)).toBeUndefined();
     expect(resolveEmbeddedRoot(srcDir)).toBe(path.join(packageRoot, 'vendor'));
+  });
+
+  it('requires the complete vendored runtime prepare script set', () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tirtc-cli-embedded-runtime-script-'));
+    const packageRoot = path.join(tempRoot, 'package');
+    const srcDir = path.join(packageRoot, 'dist', 'src');
+    const scriptDir = path.join(packageRoot, 'vendor', 'runtime', 'script');
+    const prepareScript = path.join(scriptDir, 'prepare_runtime_media_dataset.sh');
+    const audioHelperScript = path.join(scriptDir, 'prepare_runtime_audio_tracks.sh');
+
+    fs.mkdirSync(srcDir, {recursive: true});
+    fs.mkdirSync(scriptDir, {recursive: true});
+    fs.mkdirSync(path.join(packageRoot, 'bin'), {recursive: true});
+    fs.writeFileSync(path.join(packageRoot, 'package.json'), '{}', 'utf8');
+    fs.writeFileSync(path.join(packageRoot, 'bin', 'tirtc-devtools-cli.js'), '#!/usr/bin/env node\n', 'utf8');
+    fs.writeFileSync(prepareScript, '#!/usr/bin/env bash\n', 'utf8');
+
+    try {
+      expect(resolveEmbeddedRuntimeScript(srcDir)).toBeUndefined();
+
+      fs.writeFileSync(audioHelperScript, '#!/usr/bin/env bash\n', 'utf8');
+      expect(resolveEmbeddedRuntimeScript(srcDir)).toBe(prepareScript);
+    } finally {
+      fs.rmSync(tempRoot, {recursive: true, force: true});
+    }
   });
 });

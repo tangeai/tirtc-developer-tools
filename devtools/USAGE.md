@@ -110,8 +110,12 @@ cache/tirtc-devtools/
 ## 本地文件输入
 
 ```sh
+mkdir -p .build/tirtc-source
+curl -L "https://download.tangeopen.com/TIRTC_OPEN_DOC/assets/sea.mp4" \
+  -o .build/tirtc-source/sea.mp4
+
 tirtc-devtools-cli --json input prepare \
-  --file ./movie.mp4 \
+  --file .build/tirtc-source/sea.mp4 \
   --cache-dir cache/tirtc-devtools
 ```
 
@@ -134,7 +138,11 @@ Device 角色不需要提供连接地址或令牌文件。生成的 bootstrap �
 文件上行：
 
 ```sh
-tirtc-devtools-cli --json input prepare --file ./movie.mp4
+mkdir -p .build/tirtc-source
+curl -L "https://download.tangeopen.com/TIRTC_OPEN_DOC/assets/sea.mp4" \
+  -o .build/tirtc-source/sea.mp4
+
+tirtc-devtools-cli --json input prepare --file .build/tirtc-source/sea.mp4
 
 tirtc-devtools-cli --json device start \
   --input file \
@@ -156,6 +164,7 @@ tirtc-devtools-cli --json device start \
 ```
 
 成功进入 ready 后，device 会写出 `cache/tirtc-devtools/device/bootstrap.json`。client 只需要消费这个 bootstrap。
+长期运行模式下，如果 client 尚未开启麦克风或尚未发送对讲音频，device 会继续等待这一路音频，不会因为对讲音频暂未到达而退出。
 
 常用参数：
 

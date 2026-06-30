@@ -116,9 +116,16 @@ for platform in "${platforms[@]}"; do
 done
 
 mkdir -p "$CLI_ROOT/vendor/runtime/script"
-if [[ -f "$REPO_ROOT/runtime/script/prepare_runtime_media_dataset.sh" ]]; then
-  cp "$REPO_ROOT/runtime/script/prepare_runtime_media_dataset.sh" \
-    "$CLI_ROOT/vendor/runtime/script/prepare_runtime_media_dataset.sh"
-fi
+for runtime_script in \
+  prepare_runtime_media_dataset.sh \
+  prepare_runtime_audio_tracks.sh
+do
+  source_script="$REPO_ROOT/runtime/script/$runtime_script"
+  if [[ ! -f "$source_script" ]]; then
+    echo "[package] runtime script missing: $source_script" >&2
+    exit 1
+  fi
+  cp "$source_script" "$CLI_ROOT/vendor/runtime/script/$runtime_script"
+done
 
 echo "[package] Done. Package staging surface staged under vendor/ (gitignored ephemeral surface)."

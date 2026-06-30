@@ -75,7 +75,8 @@ export function resolveEmbeddedRuntimeScript(fromDir: string): string | undefine
     return undefined;
   }
   const scriptPath = path.join(embeddedRoot, 'runtime/script/prepare_runtime_media_dataset.sh');
-  if (pathExists(scriptPath)) {
+  const audioHelperPath = path.join(embeddedRoot, 'runtime/script/prepare_runtime_audio_tracks.sh');
+  if (pathExists(scriptPath) && pathExists(audioHelperPath)) {
     return scriptPath;
   }
   return undefined;

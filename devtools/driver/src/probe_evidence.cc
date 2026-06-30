@@ -348,8 +348,13 @@ std::string system_output_json(const DriverContext& context) {
   const bool requested = system_output_requested(context.request);
   const bool failed = !context.reason_code.empty() && context.reason_code != "ok" &&
                       context.reason_code != "first_output_timeout";
+  const bool no_role_failure = context.reason_code.empty() || context.reason_code == "ok";
+  const bool pending_receive_audio = requested && context.request.receive_audio_enabled &&
+                                     context.received_audio_enabled &&
+                                     !context.received_audio_observed && no_role_failure;
   const std::string audio_state = !requested                                      ? "not_requested"
                                   : context.first_audio_output_ms >= 0            ? "playing"
+                                  : pending_receive_audio                         ? "buffering"
                                   : context.reason_code == "first_output_timeout" ? "buffering"
                                   : failed                                        ? "failed"
                                                                                   : "started";
@@ -682,6 +687,9 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
 
   const bool device_role = is_device_role(context->request);
   const bool receive_role = is_receive_role(context->request);
+  const bool system_device_input = device_role && context->request.input_mode == "system";
+  const bool file_device_input = device_role && !system_device_input;
+  const bool asset_root_required = file_device_input || receive_role;
   const bool fixed_cache_input =
       !context->asset_root.empty() && asset_root_uses_fixed_cache(context->asset_root);
   if (context->request.schema_version != kRequestSchemaVersion) {
@@ -701,7 +709,7 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
   } else if (receive_role &&
              (context->request.remote_id.empty() || context->request.token.empty())) {
     *out_reason = "missing_env";
-  } else if (device_role && context->request.media_source_path.empty() &&
+  } else if (file_device_input && context->request.media_source_path.empty() &&
              context->asset_root.empty()) {
     *out_reason = "asset_missing";
   } else if (receive_role && context->request.output_consumer != "frame_dump" &&
@@ -730,7 +738,7 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
               !std::filesystem::exists(std::filesystem::path(context->runtime_root) / "lib" /
                                        "libtirtc_av.so"))) {
     *out_reason = "runtime_bundle_missing";
-  } else if (device_role && !context->asset_root.empty() &&
+  } else if (file_device_input && !context->asset_root.empty() &&
              (!std::filesystem::exists(audio_media_path(
                   context->asset_root, context->request.audio_codec,
                   context->request.audio_sample_rate_hz, context->request.audio_channels)) ||
@@ -738,7 +746,7 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
                   context->asset_root, context->request.audio_codec,
                   context->request.audio_sample_rate_hz, context->request.audio_channels)))) {
     *out_reason = "audio_asset_missing";
-  } else if (fixed_cache_input &&
+  } else if (asset_root_required && fixed_cache_input &&
              (!std::filesystem::exists(std::filesystem::path(context->asset_root) /
                                        "media_input.json") ||
               !std::filesystem::exists(
@@ -746,7 +754,7 @@ bool validate_preflight(DriverContext* context, const std::string& request_json,
               !std::filesystem::exists(
                   codec_packets_path(context->asset_root, context->request.video_codec)))) {
     *out_reason = "asset_missing";
-  } else if (!context->asset_root.empty() && !fixed_cache_input &&
+  } else if (asset_root_required && !context->asset_root.empty() && !fixed_cache_input &&
              (!std::filesystem::exists(std::filesystem::path(context->asset_root) /
                                        "manifest.json") ||
               !std::filesystem::exists(codec_media_path(context->asset_root, "h264")) ||

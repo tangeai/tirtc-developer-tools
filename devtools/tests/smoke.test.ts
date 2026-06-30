@@ -80,7 +80,8 @@ describe('tirtc-devtools-cli smoke test', () => {
     expect(output).toContain('Usage: tirtc-devtools-cli input prepare [options]');
     expect(output).toContain('--file <path>');
     expect(output).toContain('--cache-dir <dir>');
-    expect(output).toContain('input prepare --file ./movie.mp4');
+    expect(output).toContain('curl -L https://download.tangeopen.com/TIRTC_OPEN_DOC/assets/sea.mp4');
+    expect(output).toContain('input prepare --file .build/tirtc-source/sea.mp4');
     expect(output).toContain('device start --input file');
     expect(output).not.toContain('--source <path>');
     expect(output).not.toContain('--output-root <dir>');

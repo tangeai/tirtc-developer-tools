@@ -27,8 +27,7 @@ constexpr auto kStreamMessageRetryDelay = std::chrono::milliseconds(250);
 constexpr int kStreamMessageMinPeriodMs = 8000;
 constexpr int kStreamMessageMaxPeriodMs = 12000;
 
-TirtcError run_blocking_video_lifecycle_with_event_pump(
-    const std::function<TirtcError()>& action) {
+TirtcError run_blocking_video_lifecycle_with_event_pump(const std::function<TirtcError()>& action) {
   std::atomic<int> done{0};
   TirtcError result = TIRTC_ERROR_OK;
   std::thread worker([&]() {
@@ -762,10 +761,11 @@ void record_system_receive_audio_for_sessions(
   }
 }
 
-bool receive_audio_timeout_expired(
-    const DriverContext* context, const std::vector<std::unique_ptr<SystemConnection>>& sessions) {
+bool receive_audio_timeout_expired(const DriverContext* context,
+                                   const std::vector<std::unique_ptr<SystemConnection>>& sessions) {
   if (context == nullptr || !context->request.receive_audio_enabled ||
-      context->received_audio_observed) {
+      context->received_audio_observed ||
+      !device_receive_audio_observation_required(context->request)) {
     return false;
   }
   const auto now = std::chrono::steady_clock::now();
@@ -913,23 +913,38 @@ bool run_system_send_role(DriverContext* context, TirtcConnService* service,
   bool role_ok = true;
   if (context->request.receive_audio_enabled && accepted_any_session &&
       !context->received_audio_observed) {
-    role_ok = false;
-    context->reason_code =
-        receive_audio_wait_expired ? "first_output_timeout" : "audio_receive_not_observed";
-    const std::string event_id = emit_event(
-        context, "error", "output",
-        receive_audio_wait_expired ? "system_output.audio.timeout"
-                                   : "output.audio_receive.not_observed",
-        "{\"reason_code\":\"" + context->reason_code + "\",\"stream_id\":" +
-            std::to_string(context->request.receive_audio_stream_id) +
-            ",\"system_output\":" + (system_output_requested(context) ? "true" : "false") +
-            ",\"file_output\":" + (file_output_requested(context) ? "true" : "false") + "}");
-    finish_stage_if_running(context, "media_receive", StageResult::Failed, context->reason_code,
-                            event_id);
-    finish_stage(context, "output", StageResult::Failed, context->reason_code, event_id);
+    if (device_receive_audio_observation_required(context->request)) {
+      role_ok = false;
+      context->reason_code =
+          receive_audio_wait_expired ? "first_output_timeout" : "audio_receive_not_observed";
+      const std::string event_id = emit_event(
+          context, "error", "output",
+          receive_audio_wait_expired ? "system_output.audio.timeout"
+                                     : "output.audio_receive.not_observed",
+          "{\"reason_code\":\"" + context->reason_code +
+              "\",\"stream_id\":" + std::to_string(context->request.receive_audio_stream_id) +
+              ",\"system_output\":" + (system_output_requested(context) ? "true" : "false") +
+              ",\"file_output\":" + (file_output_requested(context) ? "true" : "false") + "}");
+      finish_stage_if_running(context, "media_receive", StageResult::Failed, context->reason_code,
+                              event_id);
+      finish_stage(context, "output", StageResult::Failed, context->reason_code, event_id);
+    } else {
+      const std::string event_id = emit_event(
+          context, "info", "output", "output.audio_receive.pending",
+          "{\"reason_code\":\"audio_receive_pending\",\"stream_id\":" +
+              std::to_string(context->request.receive_audio_stream_id) +
+              ",\"system_output\":" + (system_output_requested(context) ? "true" : "false") +
+              ",\"file_output\":" + (file_output_requested(context) ? "true" : "false") +
+              ",\"observation_required\":false}");
+      finish_stage_if_running(context, "media_receive", StageResult::Skipped,
+                              "audio_receive_pending", event_id);
+      finish_stage_if_running(context, "output", StageResult::Skipped, "audio_receive_pending",
+                              event_id);
+    }
   }
   if (role_ok && context->request.receive_audio_enabled && accepted_any_session &&
-      file_output_requested(context) && !write_media_receive_artifacts(context)) {
+      context->received_audio_observed && file_output_requested(context) &&
+      !write_media_receive_artifacts(context)) {
     role_ok = false;
     const std::string event_id = emit_event(context, "error", "output", "output.file_dump.failed",
                                             "{\"reason_code\":\"file_output_failed\"}");

@@ -355,15 +355,12 @@ RoleRequest parse_request(const std::string& request_json) {
   if (request.audio_input_processing_status.empty()) {
     request.audio_input_processing_status = "not_requested";
   }
-  request.audio_input_aec =
-      fallback_string(get_path_string(request_json, {"audio_processing", "input", "requested", "aec"}),
-                      "disabled");
-  request.audio_input_agc =
-      fallback_string(get_path_string(request_json, {"audio_processing", "input", "requested", "agc"}),
-                      "disabled");
-  request.audio_input_ans =
-      fallback_string(get_path_string(request_json, {"audio_processing", "input", "requested", "ans"}),
-                      "disabled");
+  request.audio_input_aec = fallback_string(
+      get_path_string(request_json, {"audio_processing", "input", "requested", "aec"}), "disabled");
+  request.audio_input_agc = fallback_string(
+      get_path_string(request_json, {"audio_processing", "input", "requested", "agc"}), "disabled");
+  request.audio_input_ans = fallback_string(
+      get_path_string(request_json, {"audio_processing", "input", "requested", "ans"}), "disabled");
   request.audio_input_aec_mode =
       get_path_int(request_json, {"audio_processing", "input", "runtime", "aec_mode"}, 0);
   request.audio_input_agc_level =
@@ -375,12 +372,12 @@ RoleRequest parse_request(const std::string& request_json) {
   if (request.audio_output_processing_status.empty()) {
     request.audio_output_processing_status = "not_requested";
   }
-  request.audio_output_agc =
-      fallback_string(get_path_string(request_json, {"audio_processing", "output", "requested", "agc"}),
-                      "disabled");
-  request.audio_output_ans =
-      fallback_string(get_path_string(request_json, {"audio_processing", "output", "requested", "ans"}),
-                      "disabled");
+  request.audio_output_agc = fallback_string(
+      get_path_string(request_json, {"audio_processing", "output", "requested", "agc"}),
+      "disabled");
+  request.audio_output_ans = fallback_string(
+      get_path_string(request_json, {"audio_processing", "output", "requested", "ans"}),
+      "disabled");
   request.audio_output_agc_level =
       get_path_int(request_json, {"audio_processing", "output", "runtime", "agc_level"}, 0);
   request.audio_output_ans_level =
@@ -400,6 +397,12 @@ RoleRequest parse_request(const std::string& request_json) {
   request.artifact_root = get_path_string(request_json, {"artifact", "root_dir"});
   request.app_id = get_path_string(request_json, {"probe", "app_id"});
   return request;
+}
+
+bool device_receive_audio_observation_required(const RoleRequest& request) {
+  const bool device_role = request.role == "device" || request.role == "send";
+  return device_role && request.receive_audio_enabled &&
+         (request.duration_ms > 0 || request.exit_after_first_session);
 }
 
 TirtcMediaCodec codec_to_runtime_codec(const std::string& codec) {

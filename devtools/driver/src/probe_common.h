@@ -278,6 +278,7 @@ int elapsed_ms_since_start(const DriverContext* context);
 std::string fnv1a64_hex(const void* data, size_t length);
 
 RoleRequest parse_request(const std::string& request_json);
+bool device_receive_audio_observation_required(const RoleRequest& request);
 TirtcMediaCodec codec_to_runtime_codec(const std::string& codec);
 TirtcVideoBitstreamFormat codec_to_bitstream_format(const std::string& codec);
 std::filesystem::path codec_media_path(const std::string& asset_root, const std::string& codec);
