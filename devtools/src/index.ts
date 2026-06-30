@@ -207,7 +207,7 @@ device.command('start')
     .addOption(new Option('--device-secret-key <key>', 'device secret key；不传时读取 TIRTC_DEVICE_SECRET_KEY').hideHelp())
     .addOption(new Option('--endpoint <url>', 'TiRTC endpoint；不传时读取 TIRTC_ENDPOINT').hideHelp())
     .addOption(new Option('--source <path>', 'legacy prepared asset root、manifest_path 或 encoded track').hideHelp())
-    .addOption(new Option('--receive-audio-stream-id <id>', '接收 Flutter 本地音频传输的 stream id').default('14').hideHelp())
+    .addOption(new Option('--receive-audio-stream-id <id>', '接收 Flutter 本地音频传输的 stream id').hideHelp())
     .addOption(new Option('--exit-after-first-session', '首个 client 会话完成后主动正常退出并写出 summary').hideHelp())
     .addOption(new Option('--client-token-json <path>', 'legacy token issue --json 输出文件').hideHelp())
     .addHelpText('after', `

@@ -295,6 +295,23 @@ describe('role driver public contract preflight', () => {
     expect(request.media?.receive_audio?.enabled).toBe(false);
   });
 
+  it('enables remote audio receive for explicit file-input device talkback runs', async () => {
+    writePreparedInput(cacheDir);
+
+    await expect(runDeviceStart({
+      cacheDir,
+      input: 'file',
+      output: 'file',
+      receiveAudioStreamId: '17',
+    } as DeviceContractOptions, {json: true})).resolves.toBe(0);
+
+    const requestPath = path.join(cacheDir, 'device', 'request.redacted.json');
+    const request = JSON.parse(fs.readFileSync(requestPath, 'utf-8')) as {
+      media?: {receive_audio?: {enabled?: boolean; stream_id?: number}};
+    };
+    expect(request.media?.receive_audio).toMatchObject({enabled: true, stream_id: 17});
+  });
+
   it('enables remote audio receive for system-input device runs', async () => {
     process.env.TIRTC_RUNTIME_PLATFORM = 'macos-arm64';
 

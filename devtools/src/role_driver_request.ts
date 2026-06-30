@@ -511,7 +511,7 @@ export async function buildDeviceRequest(
   const cacheDir = resolveCacheDir(options.cacheDir);
   const mediaSourcePath = options.source ??
     (inputMode === 'file' ? path.join(cacheDir, 'input') : '');
-  const receiveAudioEnabled = inputMode === 'system';
+  const receiveAudioEnabled = inputMode === 'system' || options.receiveAudioStreamId !== undefined;
   return {
     schema_version: 1,
     execution_id: executionId,
